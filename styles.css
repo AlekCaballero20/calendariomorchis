@@ -1,0 +1,123 @@
+:root {
+    --fondo: #e7f9f1;
+    --principal: #5e9be0;
+    --text: #333;
+}
+
+body {
+    font-family: 'Roboto', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: var(--fondo);
+    color: var(--text);
+    text-align: center;
+}
+
+.titulo h1 {
+    font-size: 50px;
+    margin: 0;
+}
+
+.frase {
+    font-size: 20px;
+    margin-top: 8px;
+    color: #888;
+}
+
+.botones {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.btn-hoja, #btn-cronograma, #btn-semanal {
+    background-color: var(--principal);
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    font-size: 20px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.btn-hoja:hover {
+    background-color: #3e9ab1;
+}
+
+.tema {
+    margin: 10px 0;
+}
+
+#calendario {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.mes {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.mes h3 {
+    background-color: var(--principal);
+    color: white;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.dias-container {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
+}
+
+.dia {
+    background: #f9f9f9;
+    padding: 10px;
+    border-radius: 6px;
+    min-height: 100px;
+}
+
+.dia.hoy {
+    background-color: #ffe066;
+    border: 2px solid #e6b800;
+}
+
+.evento {
+    background: #d9fdd3;
+    padding: 6px;
+    border-radius: 5px;
+    margin-top: 5px;
+    font-size: 20px;
+}
+
+/* Temas */
+.tema-morchis {
+    --fondo: #e7f9f1;
+    --principal: #3b8db3;
+    --text: #333;
+}
+
+.tema-pastel {
+    --fondo: #fff4f8;
+    --principal: #fcb3c2;
+    --text: #444;
+}
+
+.tema-oscuro {
+    --fondo: #1e1e1e;
+    --principal: #4444ff;
+    --text: #eee;
+}
+
+.copyright {
+    font-size: 14px;
+    margin-top: 40px;
+    color: #777;
+}

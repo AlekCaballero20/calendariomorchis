@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario Morchis 2025</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="tema-morchis">
+
+    <div class="titulo">
+        <h1>📆 Calendario Morchis 2025</h1>
+    </div>
+
+    <div class="controles">
+        <div class="botones">
+            <button class="btn-hoja" data-hoja="C. Festivo">Festivos</button>
+            <button class="btn-hoja" data-hoja="C. Cumpleaños">Cumpleaños</button>
+            <button class="btn-hoja" data-hoja="C. Académico">Académico</button>
+            <button class="btn-hoja" data-hoja="C. Salud">Salud</button>
+            <button class="btn-hoja" data-hoja="C. Financiero">Financiero</button>
+            <button class="btn-hoja" data-hoja="C. Familiar">Familiar</button>
+            <button class="btn-hoja" data-hoja="C. Experiencias">Experiencias</button>
+            <button id="btn-semanal">Vista Semanal</button>
+            <button id="btn-cronograma">Cronograma Completo</button>
+        </div>
+
+        <div class="tema">
+            <label for="selector-tema">Tema:</label>
+            <select id="selector-tema">
+                <option value="morchis">🌿 Morchis</option>
+                <option value="pastel">🍬 Pastel</option>
+                <option value="oscuro">🌙 Oscuro</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="calendario"></div>
+
+    <p class="copyright">© 2025 Morchis. Creado con amor para Cata 💚</p>
+
+    <script src="script.js"></script>
+</body>
+</html>
