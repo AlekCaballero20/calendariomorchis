@@ -1,44 +1,215 @@
-<!DOCTYPE html>
-<html lang="es">
+<!doctype html>
+<html lang="es-CO">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calendario Morchis 2025</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Calendario · Alek & Cata</title>
+
+  <meta name="theme-color" content="#0C41C4" />
+  <meta name="color-scheme" content="light" />
+  <meta name="format-detection" content="telephone=no" />
+
+  <link rel="stylesheet" href="./styles.css" />
 </head>
-<body class="tema-morchis">
 
-    <div class="titulo">
-        <h1>📆 Calendario Morchis 2025</h1>
+<body>
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand" aria-label="Calendario privado">
+      <div class="logo" aria-hidden="true">📆</div>
+      <div class="brandText">
+        <div class="title">Calendario</div>
+        <div class="subtitle">Alek &amp; Cata (privado)</div>
+      </div>
     </div>
 
-    <div class="controles">
-        <div class="botones">
-            <button class="btn-hoja" data-hoja="C. Festivo">Festivos</button>
-            <button class="btn-hoja" data-hoja="C. Cumpleaños">Cumpleaños</button>
-            <button class="btn-hoja" data-hoja="C. Académico">Académico</button>
-            <button class="btn-hoja" data-hoja="C. Salud">Salud</button>
-            <button class="btn-hoja" data-hoja="C. Financiero">Financiero</button>
-            <button class="btn-hoja" data-hoja="C. Familiar">Familiar</button>
-            <button class="btn-hoja" data-hoja="C. Experiencias">Experiencias</button>
-            <button id="btn-semanal">Vista Semanal</button>
-            <button id="btn-cronograma">Cronograma Completo</button>
-        </div>
-
-        <div class="tema">
-            <label for="selector-tema">Tema:</label>
-            <select id="selector-tema">
-                <option value="morchis">🌿 Morchis</option>
-                <option value="pastel">🍬 Pastel</option>
-                <option value="oscuro">🌙 Oscuro</option>
-            </select>
-        </div>
+    <div class="topActions">
+      <div id="userPill" class="pill hidden" title="Usuario actual" aria-live="polite"></div>
+      <button id="btnLogout" class="btn ghost hidden" type="button">Salir</button>
     </div>
+  </header>
 
-    <div id="calendario"></div>
+  <!-- Auth screen -->
+  <main id="authScreen" class="screen">
+    <section class="card authCard" aria-label="Ingreso">
+      <h1>Entrar</h1>
+      <p class="muted">
+        Acceso restringido. Si no eres Alek o Cata, no vas a poder entrar (y no es personal, es seguridad 😌).
+      </p>
 
-    <p class="copyright">© 2025 Morchis. Creado con amor para Cata 💚</p>
+      <form id="loginForm" class="form" autocomplete="on">
+        <label class="field">
+          <span>Correo</span>
+          <input
+            id="email"
+            type="email"
+            autocomplete="email"
+            inputmode="email"
+            autocapitalize="none"
+            spellcheck="false"
+            required
+            autofocus
+            placeholder="correo@dominio.com"
+            aria-label="Correo"
+          />
+        </label>
 
-    <script src="script.js"></script>
+        <label class="field">
+          <span>Contraseña</span>
+          <input
+            id="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            placeholder="••••••••"
+            aria-label="Contraseña"
+          />
+        </label>
+
+        <button class="btn primary" type="submit">Entrar</button>
+
+        <div class="divider" role="separator" aria-label="Alternativa de ingreso">
+          <span>o</span>
+        </div>
+
+        <button id="btnGoogle" class="btn" type="button">Entrar con Google</button>
+
+        <p class="hint">
+          Nota: el acceso real está controlado por Firebase (Auth + Rules). No hay “modo demo”.
+        </p>
+      </form>
+
+      <div id="authMsg" class="msg hidden" role="status" aria-live="polite"></div>
+
+      <!-- Mini estado (opcional, no rompe nada si no lo usas) -->
+      <div id="authFoot" class="muted" style="margin-top:10px;font-size:12px;opacity:.85;">
+        © <span id="year"></span> Alek &amp; Cata
+      </div>
+    </section>
+  </main>
+
+  <!-- App screen -->
+  <main id="appScreen" class="screen hidden">
+    <section class="layout">
+      <!-- Left rail -->
+      <aside class="rail" aria-label="Panel lateral">
+        <div class="railBlock">
+          <div class="railTitle">Vista</div>
+          <div class="segmented" role="tablist" aria-label="Cambiar vista">
+            <button class="seg on" data-view="month" type="button" role="tab" aria-selected="true">Mes</button>
+            <button class="seg" data-view="week" type="button" role="tab" aria-selected="false">Semana</button>
+            <button class="seg" data-view="agenda" type="button" role="tab" aria-selected="false">Agenda</button>
+          </div>
+        </div>
+
+        <div class="railBlock">
+          <div class="railTitle">Filtros</div>
+          <div id="filterChips" class="chips" aria-label="Filtros por categoría"></div>
+        </div>
+
+        <div class="railBlock">
+          <div class="railTitle">Buscar</div>
+          <input id="search" class="search" placeholder="Buscar eventos..." aria-label="Buscar eventos" />
+        </div>
+
+        <div class="railBlock">
+          <button id="btnToday" class="btn" type="button">Ir a hoy</button>
+          <button id="btnNew" class="btn primary" type="button">Nuevo evento</button>
+        </div>
+      </aside>
+
+      <!-- Main calendar -->
+      <section class="stage" aria-label="Calendario">
+        <div class="stageTop">
+          <button id="btnPrev" class="btn icon" type="button" title="Anterior" aria-label="Anterior">◀</button>
+
+          <div class="stageTitle">
+            <div id="titleMain" class="h2">—</div>
+            <div id="titleSub" class="muted">—</div>
+          </div>
+
+          <button id="btnNext" class="btn icon" type="button" title="Siguiente" aria-label="Siguiente">▶</button>
+        </div>
+
+        <div id="calendar" class="calendar" aria-label="Vista del calendario"></div>
+      </section>
+
+      <!-- Right panel -->
+      <aside id="panel" class="panel hidden" aria-live="polite" aria-label="Detalle">
+        <div class="panelHead">
+          <div class="panelTitle">Detalle</div>
+          <button id="btnClosePanel" class="btn icon" type="button" title="Cerrar" aria-label="Cerrar">✕</button>
+        </div>
+        <div id="panelBody" class="panelBody"></div>
+      </aside>
+    </section>
+  </main>
+
+  <!-- Modal: New/Edit Event -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Editar evento">
+    <div class="modalCard">
+      <div class="modalHead">
+        <div id="modalTitle" class="modalTitle">Nuevo evento</div>
+        <button id="btnCloseModal" class="btn icon" type="button" title="Cerrar" aria-label="Cerrar">✕</button>
+      </div>
+
+      <form id="eventForm" class="form grid2">
+        <label class="field span2">
+          <span>Título</span>
+          <input id="evTitle" required placeholder="Ej: Pago arriendo / Cumple / Viaje / Cita" />
+        </label>
+
+        <label class="field">
+          <span>Inicio</span>
+          <input id="evStart" type="datetime-local" required />
+        </label>
+
+        <label class="field">
+          <span>Fin (opcional)</span>
+          <input id="evEnd" type="datetime-local" />
+        </label>
+
+        <label class="field">
+          <span>Categoría</span>
+          <select id="evCategory">
+            <option value="personal">Personal</option>
+            <option value="salud">Salud</option>
+            <option value="finanzas">Finanzas</option>
+            <option value="familia">Familia</option>
+            <option value="cumple">Cumpleaños</option>
+            <option value="experiencias">Experiencias</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Prioridad</span>
+          <select id="evPriority">
+            <option value="normal">Normal</option>
+            <option value="importante">Importante</option>
+            <option value="critico">Crítico</option>
+          </select>
+        </label>
+
+        <label class="field span2">
+          <span>Notas</span>
+          <textarea id="evNotes" rows="4" placeholder="Detalles…"></textarea>
+        </label>
+
+        <div class="modalActions span2">
+          <button id="btnDelete" class="btn danger hidden" type="button">Eliminar</button>
+          <div class="spacer"></div>
+          <button class="btn" type="button" id="btnCancel">Cancelar</button>
+          <button class="btn primary" type="submit">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // mini detalle: año automático (no depende de app.js)
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
