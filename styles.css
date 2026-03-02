@@ -1,38 +1,151 @@
 :root{
+  /* ==========================================================================
+     Calendario Morchis — Light Only (porque la vida ya es lo suficientemente oscura)
+     - Tokens consistentes
+     - Accesibilidad mejorada
+     - UI más “app”
+  ========================================================================== */
+
+  /* Base */
   --bg: #f6f8ff;
+
   --surface: rgba(255,255,255,.86);
   --surface2: rgba(255,255,255,.72);
+  --surface3: rgba(255,255,255,.92);
+
   --text: #0b1020;
   --muted: rgba(11,16,32,.62);
-  --line: rgba(12,65,196,.14);
 
-  --brand: #0C41C4;
+  --brand:  #0C41C4;
   --brand2: #7C3AED;
 
-  --shadow: 0 10px 30px rgba(10,20,60,.10);
+  --line:  rgba(12,65,196,.14);
+  --line2: rgba(11,16,32,.10);
+
+  --shadow:  0 10px 30px rgba(10,20,60,.10);
+  --shadow2: 0 18px 46px rgba(10,20,60,.14);
+
+  --r10: 10px;
   --r12: 12px;
+  --r14: 14px;
   --r16: 16px;
+  --r18: 18px;
+  --r22: 22px;
 
   --pad: 14px;
   --gap: 12px;
 
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+
+  /* Focus rings */
+  --ring:  0 0 0 4px rgba(12,65,196,.12);
+  --ring2: 0 0 0 3px rgba(124,58,237,.12);
+
+  /* Status */
+  --danger: rgba(240,68,56,1);
+  --warn:   rgba(245,158,11,1);
+  --ok:     rgba(22,163,74,1);
+
+  /* Semantic surfaces */
+  --cardBorder: 1px solid var(--line);
+  --softBorder: 1px solid rgba(12,65,196,.08);
 }
 
-*{ box-sizing: border-box; }
-html,body{ height:100%; }
+/* ==========================================================================
+   Base reset-ish
+========================================================================== */
+*{ box-sizing:border-box; }
+html, body{ height:100%; }
+
 body{
   margin:0;
   font-family: var(--font);
   color: var(--text);
-  background: radial-gradient(1100px 600px at 15% 10%, rgba(124,58,237,.10), transparent 55%),
-              radial-gradient(900px 500px at 85% 0%, rgba(12,65,196,.10), transparent 55%),
-              var(--bg);
+  background:
+    radial-gradient(1100px 600px at 15% 10%, rgba(124,58,237,.10), transparent 55%),
+    radial-gradient(900px 500px at 85% 0%, rgba(12,65,196,.10), transparent 55%),
+    var(--bg);
   overflow-x:hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .hidden{ display:none !important; }
 
+::selection{
+  background: rgba(12,65,196,.18);
+}
+
+a{ color: inherit; text-decoration: none; }
+a:hover{ text-decoration: underline; }
+
+/* ==========================================================================
+   Accessibility helpers
+========================================================================== */
+.skipLink{
+  position:absolute;
+  left:-9999px;
+  top: 10px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: var(--surface3);
+  border: var(--cardBorder);
+  box-shadow: var(--shadow);
+  z-index: 999;
+}
+.skipLink:focus{
+  left: 12px;
+  outline:none;
+  box-shadow: var(--ring), var(--shadow2);
+}
+
+.noscript{
+  margin: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r16);
+  border: 1px solid rgba(240,68,56,.18);
+  background: rgba(240,68,56,.08);
+  color: rgba(180,35,24,.95);
+  box-shadow: var(--shadow);
+}
+
+/* ==========================================================================
+   Focus / controls
+========================================================================== */
+:where(button, input, select, textarea, [tabindex]):focus{ outline:none; }
+:where(button, input, select, textarea, [tabindex]):focus-visible{
+  box-shadow: var(--ring);
+  border-color: rgba(12,65,196,.32) !important;
+}
+
+button, .chip, .seg{
+  touch-action: manipulation;
+}
+
+/* scrollbars (soft) */
+*{
+  scrollbar-width: thin;
+  scrollbar-color: rgba(11,16,32,.25) transparent;
+}
+*::-webkit-scrollbar{ height: 10px; width: 10px; }
+*::-webkit-scrollbar-thumb{
+  background: rgba(11,16,32,.18);
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,.65);
+}
+*::-webkit-scrollbar-track{ background: transparent; }
+
+/* ==========================================================================
+   Typography
+========================================================================== */
+h1{ margin: 0 0 6px; font-size: 26px; letter-spacing: -.2px; }
+.h2{ font-size: 18px; font-weight: 900; letter-spacing: -.1px; }
+.muted{ color: var(--muted); }
+.hint{ color: var(--muted); font-size: 12px; margin: 12px 0 0; }
+
+/* ==========================================================================
+   Topbar
+========================================================================== */
 .topbar{
   position: sticky;
   top: 0;
@@ -42,23 +155,36 @@ body{
   align-items:center;
   justify-content:space-between;
   gap: 12px;
+
   backdrop-filter: blur(14px);
   background: linear-gradient(180deg, rgba(246,248,255,.92), rgba(246,248,255,.72));
   border-bottom: 1px solid var(--line);
 }
 
-.brand{ display:flex; gap:10px; align-items:center; }
+.brand{ display:flex; gap:10px; align-items:center; min-width: 0; }
 .logo{
-  width: 38px; height: 38px; border-radius: 12px;
+  width: 38px; height: 38px;
+  border-radius: 12px;
   display:grid; place-items:center;
   background: linear-gradient(135deg, rgba(12,65,196,.14), rgba(124,58,237,.12));
   border: 1px solid var(--line);
+  box-shadow: 0 10px 20px rgba(10,20,60,.06);
 }
-.title{ font-weight: 800; letter-spacing:.2px; }
-.subtitle{ font-size: 12px; color: var(--muted); margin-top:2px; }
-
+.brandText{ min-width: 0; }
+.title{ font-weight: 900; letter-spacing:.2px; line-height: 1.1; }
+.subtitle{
+  font-size: 12px;
+  color: var(--muted);
+  margin-top:2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .topActions{ display:flex; gap:10px; align-items:center; }
 
+/* ==========================================================================
+   Pills / Cards / Screens
+========================================================================== */
 .pill{
   padding: 8px 10px;
   border-radius: 999px;
@@ -67,6 +193,10 @@ body{
   box-shadow: var(--shadow);
   font-size: 12px;
   color: rgba(11,16,32,.8);
+  max-width: 42vw;
+  overflow:hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .screen{
@@ -76,7 +206,7 @@ body{
 
 .card{
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: var(--cardBorder);
   border-radius: var(--r16);
   box-shadow: var(--shadow);
 }
@@ -87,14 +217,22 @@ body{
   padding: 18px;
 }
 
-h1{ margin: 0 0 6px; font-size: 26px; }
-.h2{ font-size: 18px; font-weight: 800; }
-.muted{ color: var(--muted); }
-.hint{ color: var(--muted); font-size: 12px; margin: 12px 0 0; }
+/* ==========================================================================
+   Forms
+========================================================================== */
+.form{
+  display:flex;
+  flex-direction:column;
+  gap: 12px;
+  margin-top: 14px;
+}
 
-.form{ display:flex; flex-direction:column; gap: 12px; margin-top: 14px; }
 .field{ display:flex; flex-direction:column; gap: 6px; }
-.field > span{ font-size: 12px; color: rgba(11,16,32,.72); }
+.field > span{
+  font-size: 12px;
+  color: rgba(11,16,32,.72);
+}
+
 input, select, textarea{
   width: 100%;
   padding: 11px 12px;
@@ -103,34 +241,71 @@ input, select, textarea{
   background: rgba(255,255,255,.88);
   color: var(--text);
   outline:none;
-}
-input:focus, select:focus, textarea:focus{
-  border-color: rgba(12,65,196,.35);
-  box-shadow: 0 0 0 4px rgba(12,65,196,.10);
+  transition: box-shadow .12s ease, border-color .12s ease, background .12s ease;
 }
 
+input::placeholder, textarea::placeholder{
+  color: rgba(11,16,32,.42);
+}
+
+input:focus, select:focus, textarea:focus{
+  border-color: rgba(12,65,196,.35);
+  box-shadow: var(--ring);
+  background: rgba(255,255,255,.94);
+}
+
+textarea{ resize: vertical; min-height: 92px; }
+
+/* ==========================================================================
+   Buttons
+========================================================================== */
 .btn{
   border: 1px solid var(--line);
   background: rgba(255,255,255,.78);
   color: rgba(11,16,32,.92);
   padding: 11px 12px;
-  border-radius: 14px;
+  border-radius: var(--r14);
   cursor:pointer;
   box-shadow: 0 8px 22px rgba(10,20,60,.08);
-  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease, opacity .12s ease;
+  user-select: none;
 }
-.btn:hover{ transform: translateY(-1px); box-shadow: 0 12px 26px rgba(10,20,60,.12); }
-.btn:active{ transform: translateY(0px) scale(.99); }
+
+.btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(10,20,60,.12);
+  border-color: rgba(12,65,196,.18);
+  background: rgba(255,255,255,.88);
+}
+
+.btn:active{
+  transform: translateY(0px) scale(.99);
+  box-shadow: 0 8px 22px rgba(10,20,60,.10);
+}
+
+.btn:disabled{
+  opacity: .55;
+  cursor:not-allowed;
+  transform:none;
+  box-shadow: none;
+}
 
 .btn.primary{
   border-color: rgba(12,65,196,.25);
   background: linear-gradient(135deg, rgba(12,65,196,.96), rgba(124,58,237,.92));
   color: white;
 }
+
+.btn.primary:hover{
+  box-shadow: 0 16px 34px rgba(12,65,196,.16);
+  border-color: rgba(12,65,196,.30);
+}
+
 .btn.ghost{
   background: transparent;
   box-shadow:none;
 }
+
 .btn.danger{
   border-color: rgba(240,68,56,.25);
   background: rgba(240,68,56,.10);
@@ -141,8 +316,12 @@ input:focus, select:focus, textarea:focus{
   width: 42px; height: 42px;
   display:grid; place-items:center;
   padding: 0;
+  border-radius: 14px;
 }
 
+/* ==========================================================================
+   Divider + Messages
+========================================================================== */
 .divider{
   display:flex; align-items:center; gap: 10px;
   color: var(--muted);
@@ -153,7 +332,12 @@ input:focus, select:focus, textarea:focus{
   height:1px; flex:1;
   background: var(--line);
 }
-.divider span{ padding: 6px 10px; border-radius:999px; border:1px solid var(--line); background: rgba(255,255,255,.6); }
+.divider span{
+  padding: 6px 10px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.6);
+}
 
 .msg{
   margin-top: 12px;
@@ -164,6 +348,9 @@ input:focus, select:focus, textarea:focus{
   color: rgba(180,35,24,.95);
 }
 
+/* ==========================================================================
+   Layout
+========================================================================== */
 .layout{
   display:grid;
   grid-template-columns: 280px 1fr 360px;
@@ -171,25 +358,50 @@ input:focus, select:focus, textarea:focus{
   align-items:start;
 }
 
+/* The three main surfaces */
 .rail, .stage, .panel{
   border-radius: var(--r16);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: var(--cardBorder);
   box-shadow: var(--shadow);
 }
 
-.rail{ padding: 14px; }
-.railBlock{ padding: 12px; border-radius: 14px; border: 1px solid rgba(12,65,196,.08); background: rgba(255,255,255,.55); }
-.railBlock + .railBlock{ margin-top: 12px; }
-.railTitle{ font-weight: 800; font-size: 12px; color: rgba(11,16,32,.72); margin-bottom: 8px; }
+/* ==========================================================================
+   Left rail
+========================================================================== */
+.rail{
+  padding: 14px;
+  position: sticky;
+  top: 74px;
+  height: fit-content;
+}
 
+.railBlock{
+  padding: 12px;
+  border-radius: 14px;
+  border: var(--softBorder);
+  background: rgba(255,255,255,.55);
+}
+
+.railBlock + .railBlock{ margin-top: 12px; }
+
+.railTitle{
+  font-weight: 900;
+  font-size: 12px;
+  color: rgba(11,16,32,.72);
+  margin-bottom: 8px;
+}
+
+/* Segmented control */
 .segmented{
-  display:flex; gap: 8px;
+  display:flex;
+  gap: 8px;
   background: rgba(255,255,255,.6);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 6px;
 }
+
 .seg{
   flex:1;
   border-radius: 999px;
@@ -197,16 +409,21 @@ input:focus, select:focus, textarea:focus{
   background: transparent;
   padding: 10px 10px;
   cursor:pointer;
-  font-weight: 700;
+  font-weight: 800;
   color: rgba(11,16,32,.72);
+  transition: background .12s ease, border-color .12s ease, color .12s ease, transform .12s ease;
 }
+.seg:hover{ transform: translateY(-1px); }
+
 .seg.on{
   background: rgba(12,65,196,.10);
   border-color: rgba(12,65,196,.18);
   color: rgba(11,16,32,.92);
 }
 
+/* Chips */
 .chips{ display:flex; flex-wrap:wrap; gap: 8px; }
+
 .chip{
   border-radius: 999px;
   padding: 8px 10px;
@@ -215,101 +432,300 @@ input:focus, select:focus, textarea:focus{
   background: rgba(255,255,255,.7);
   cursor:pointer;
   user-select:none;
+  transition: transform .12s ease, opacity .12s ease, background .12s ease, border-color .12s ease;
 }
-.chip.off{ opacity: .45; filter: grayscale(.1); }
 
+.chip:hover{
+  transform: translateY(-1px);
+  border-color: rgba(12,65,196,.20);
+  background: rgba(255,255,255,.84);
+}
+
+.chip.off{
+  opacity: .48;
+  filter: grayscale(.08);
+}
+
+/* Search */
 .search{ border-radius: 14px; }
 
-.stage{ padding: 14px; min-height: 70vh; }
-.stageTop{ display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-bottom: 10px; }
-.stageTitle{ text-align:center; line-height:1.1; }
-.calendar{ border-radius: 16px; overflow:hidden; border: 1px solid rgba(12,65,196,.10); background: rgba(255,255,255,.55); }
+/* ==========================================================================
+   Stage / Calendar
+========================================================================== */
+.stage{
+  padding: 14px;
+  min-height: 70vh;
+}
 
+.stageTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.stageTitle{
+  text-align:center;
+  line-height:1.1;
+  min-width: 0;
+}
+
+.calendar{
+  border-radius: 16px;
+  overflow:hidden;
+  border: 1px solid rgba(12,65,196,.10);
+  background: rgba(255,255,255,.55);
+}
+
+/* Grid helpers */
 .grid{
   display:grid;
   grid-template-columns: repeat(7, 1fr);
 }
+
 .weekdays{
   background: rgba(12,65,196,.06);
   border-bottom: 1px solid rgba(12,65,196,.10);
 }
+
 .weekday{
   padding: 10px 8px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 900;
   color: rgba(11,16,32,.70);
   text-align:center;
+  letter-spacing: .2px;
 }
+
+/* Day cell */
 .day{
-  min-height: 96px;
+  min-height: 104px;
   padding: 10px 10px 12px;
   border-right: 1px solid rgba(12,65,196,.08);
   border-bottom: 1px solid rgba(12,65,196,.08);
   position: relative;
   cursor:pointer;
   background: rgba(255,255,255,.55);
-  transition: background .12s ease, transform .12s ease;
+  transition: background .12s ease, transform .12s ease, box-shadow .12s ease;
 }
-.day:hover{ background: rgba(255,255,255,.78); transform: translateY(-1px); }
+
+.day:hover{
+  background: rgba(255,255,255,.82);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(10,20,60,.08);
+}
+
 .day:nth-child(7n){ border-right: none; }
 
 .dayNum{
-  font-weight: 900;
+  font-weight: 950;
   font-size: 12px;
   color: rgba(11,16,32,.72);
 }
+
+/* Today highlight */
 .day.today{
-  outline: 2px solid rgba(12,65,196,.25);
+  outline: 2px solid rgba(12,65,196,.24);
   outline-offset: -2px;
-  background: rgba(12,65,196,.06);
+  background: rgba(12,65,196,.07);
 }
-.badges{ margin-top: 8px; display:flex; flex-direction:column; gap:6px; }
+
+/* Muted days (si ui.js los usa) */
+.day.out{
+  opacity: .55;
+  background: rgba(255,255,255,.45);
+}
+
+/* Event badges */
+.badges{
+  margin-top: 8px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
 .badge{
   border-radius: 10px;
   padding: 6px 8px;
   font-size: 12px;
   border: 1px solid rgba(12,65,196,.10);
-  background: rgba(255,255,255,.72);
+  background: rgba(255,255,255,.78);
   white-space: nowrap;
   overflow:hidden;
   text-overflow: ellipsis;
 }
-.badge.important{ border-color: rgba(245,158,11,.20); background: rgba(245,158,11,.10); }
-.badge.critico{ border-color: rgba(240,68,56,.22); background: rgba(240,68,56,.10); }
 
-.panel{ padding: 14px; }
-.panelHead{ display:flex; align-items:center; justify-content:space-between; }
-.panelTitle{ font-weight: 900; }
-.panelBody{ margin-top: 10px; display:flex; flex-direction:column; gap: 10px; }
+.badge:hover{
+  border-color: rgba(12,65,196,.18);
+  background: rgba(255,255,255,.90);
+}
 
+.badge.important{
+  border-color: rgba(245,158,11,.20);
+  background: rgba(245,158,11,.10);
+}
+.badge.critico{
+  border-color: rgba(240,68,56,.22);
+  background: rgba(240,68,56,.10);
+}
+
+/* ==========================================================================
+   Right panel
+========================================================================== */
+.panel{
+  padding: 14px;
+  position: sticky;
+  top: 74px;
+  height: fit-content;
+}
+
+.panelHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.panelTitle{ font-weight: 950; }
+
+.panelBody{
+  margin-top: 10px;
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+}
+
+/* Nice little separators for content ui.js may inject */
+.panelBody hr{
+  border:0;
+  border-top: 1px solid rgba(12,65,196,.10);
+  margin: 8px 0;
+}
+
+/* ==========================================================================
+   Modal
+========================================================================== */
 .modal{
-  position: fixed; inset:0;
-  background: rgba(10,20,60,.20);
-  display:grid; place-items:center;
+  position: fixed;
+  inset:0;
+  background: rgba(10,20,60,.22);
+  display:grid;
+  place-items:center;
   padding: 18px;
   z-index: 50;
+  animation: fadeIn .12s ease;
 }
+
+@keyframes fadeIn{
+  from{ opacity: 0; }
+  to{ opacity: 1; }
+}
+
 .modalCard{
   width: min(720px, 100%);
-  background: rgba(255,255,255,.92);
-  border: 1px solid rgba(255,255,255,.45);
+  background: rgba(255,255,255,.94);
+  border: 1px solid rgba(255,255,255,.50);
   border-radius: 18px;
-  box-shadow: 0 20px 60px rgba(10,20,60,.22);
+  box-shadow: 0 24px 70px rgba(10,20,60,.24);
   backdrop-filter: blur(18px);
   padding: 14px;
+  animation: popIn .12s ease;
+  max-height: calc(100vh - 56px);
+  overflow: auto;
 }
-.modalHead{ display:flex; align-items:center; justify-content:space-between; gap: 10px; }
-.modalTitle{ font-weight: 900; }
+
+@keyframes popIn{
+  from{ transform: translateY(6px) scale(.99); opacity:.92; }
+  to{ transform: translateY(0px) scale(1); opacity:1; }
+}
+
+.modalHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  background: rgba(255,255,255,.92);
+  padding: 4px 0 10px;
+  z-index: 1;
+  backdrop-filter: blur(10px);
+}
+
+.modalTitle{ font-weight: 950; }
+
 .grid2{
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+
 .span2{ grid-column: 1 / -1; }
-.modalActions{ display:flex; align-items:center; gap: 10px; }
+
+.modalActions{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
 .spacer{ flex:1; }
+
+/* ==========================================================================
+   Responsive
+========================================================================== */
+@media (max-width: 1100px){
+  .layout{
+    grid-template-columns: 260px 1fr 320px;
+  }
+}
 
 @media (max-width: 980px){
   .layout{ grid-template-columns: 1fr; }
-  .panel{ order: 3; }
+  .rail{ position: relative; top: auto; }
+  .panel{ position: relative; top: auto; order: 3; }
+  .stage{ min-height: auto; }
+}
+
+@media (max-width: 560px){
+  .screen{ padding: 14px 12px 22px; }
+
+  .topbar{ padding: 10px 12px; }
+  .logo{ width: 36px; height: 36px; border-radius: 12px; }
+
+  h1{ font-size: 24px; }
+
+  .rail{ padding: 12px; }
+  .stage{ padding: 12px; }
+  .panel{ padding: 12px; }
+
+  .btn.icon{ width: 44px; height: 44px; } /* thumb-friendly */
+
+  .day{
+    min-height: 92px;
+    padding: 9px 9px 11px;
+  }
+
+  .weekday{ padding: 9px 6px; font-size: 11px; }
+
+  /* Modal becomes bottom-sheet-ish */
+  .modal{
+    place-items: end center;
+    padding: 12px;
+  }
+
+  .modalCard{
+    width: 100%;
+    border-radius: 18px;
+    padding: 12px;
+    max-height: calc(100vh - 18px);
+  }
+
+  .grid2{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce){
+  *{ transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }

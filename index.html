@@ -3,18 +3,36 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Calendario · Alek & Cata</title>
 
+  <title>Calendario · Alek &amp; Cata</title>
+  <meta name="description" content="Calendario privado de Alek & Cata. Eventos, recurrencias, recordatorios y configuración." />
+
+  <!-- UX / PWA-lite (sin convertirlo a PWA) -->
   <meta name="theme-color" content="#0C41C4" />
   <meta name="color-scheme" content="light" />
   <meta name="format-detection" content="telephone=no" />
+
+  <!-- Social -->
+  <meta property="og:title" content="Calendario · Alek & Cata" />
+  <meta property="og:description" content="Calendario privado. Eventos, recurrencias, recordatorios y configuración." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary" />
 
   <link rel="stylesheet" href="./styles.css" />
 </head>
 
 <body>
+  <!-- Accesibilidad: salto al contenido principal -->
+  <a class="skipLink" href="#mainApp">Saltar al contenido</a>
+
+  <noscript>
+    <div class="noscript">
+      Este calendario necesita JavaScript para funcionar. (Sí, así es la web moderna 🙃)
+    </div>
+  </noscript>
+
   <!-- Topbar -->
-  <header class="topbar">
+  <header class="topbar" role="banner">
     <div class="brand" aria-label="Calendario privado">
       <div class="logo" aria-hidden="true">📆</div>
       <div class="brandText">
@@ -23,21 +41,42 @@
       </div>
     </div>
 
-    <div class="topActions">
+    <div class="topActions" aria-label="Acciones">
+      <!-- Usuario actual -->
       <div id="userPill" class="pill hidden" title="Usuario actual" aria-live="polite"></div>
-      <button id="btnLogout" class="btn ghost hidden" type="button">Salir</button>
+
+      <!-- Config -->
+      <button
+        id="btnSettings"
+        class="btn ghost hidden"
+        type="button"
+        title="Configuración"
+        aria-label="Configuración"
+        aria-haspopup="dialog"
+        aria-controls="settingsModal"
+      >⚙️</button>
+
+      <!-- Salir -->
+      <button
+        id="btnLogout"
+        class="btn ghost hidden"
+        type="button"
+        aria-label="Salir"
+      >Salir</button>
     </div>
   </header>
 
   <!-- Auth screen -->
-  <main id="authScreen" class="screen">
-    <section class="card authCard" aria-label="Ingreso">
+  <main id="authScreen" class="screen" role="main" aria-label="Ingreso">
+    <section class="card authCard" aria-label="Ingreso al calendario">
       <h1>Entrar</h1>
+
       <p class="muted">
-        Acceso restringido. Si no eres Alek o Cata, no vas a poder entrar (y no es personal, es seguridad 😌).
+        Acceso restringido. Si no eres Alek o Cata, no vas a poder entrar
+        (y no es personal, es seguridad 😌).
       </p>
 
-      <form id="loginForm" class="form" autocomplete="on">
+      <form id="loginForm" class="form" autocomplete="on" aria-label="Formulario de ingreso">
         <label class="field">
           <span>Correo</span>
           <input
@@ -81,7 +120,6 @@
 
       <div id="authMsg" class="msg hidden" role="status" aria-live="polite"></div>
 
-      <!-- Mini estado (opcional, no rompe nada si no lo usas) -->
       <div id="authFoot" class="muted" style="margin-top:10px;font-size:12px;opacity:.85;">
         © <span id="year"></span> Alek &amp; Cata
       </div>
@@ -89,8 +127,9 @@
   </main>
 
   <!-- App screen -->
-  <main id="appScreen" class="screen hidden">
-    <section class="layout">
+  <main id="appScreen" class="screen hidden" role="main" aria-label="Aplicación">
+    <section id="mainApp" class="layout" aria-label="Calendario y paneles">
+
       <!-- Left rail -->
       <aside class="rail" aria-label="Panel lateral">
         <div class="railBlock">
@@ -102,28 +141,52 @@
           </div>
         </div>
 
+        <!-- Stats -->
+        <div class="railBlock" id="statsBlock" aria-label="Resumen del mes">
+          <div class="railTitle">Resumen del mes</div>
+          <div class="muted" style="font-size:12px;line-height:1.35;">
+            (Próximamente) Eventos por categoría, críticos, rachas, días libres y más.
+          </div>
+          <div id="statsBox" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+            <!-- ui.js puede inyectar contenido aquí -->
+          </div>
+        </div>
+
+        <!-- Filters -->
         <div class="railBlock">
           <div class="railTitle">Filtros</div>
           <div id="filterChips" class="chips" aria-label="Filtros por categoría"></div>
         </div>
 
+        <!-- Search -->
         <div class="railBlock">
           <div class="railTitle">Buscar</div>
-          <input id="search" class="search" placeholder="Buscar eventos..." aria-label="Buscar eventos" />
+          <input
+            id="search"
+            class="search"
+            placeholder="Buscar eventos..."
+            aria-label="Buscar eventos"
+            autocomplete="off"
+            spellcheck="false"
+          />
         </div>
 
+        <!-- Actions -->
         <div class="railBlock">
           <button id="btnToday" class="btn" type="button">Ir a hoy</button>
           <button id="btnNew" class="btn primary" type="button">Nuevo evento</button>
         </div>
+
+        <!-- Mensajes de app (para evitar alertazos) -->
+        <div id="appMsg" class="msg hidden" role="status" aria-live="polite"></div>
       </aside>
 
       <!-- Main calendar -->
       <section class="stage" aria-label="Calendario">
-        <div class="stageTop">
+        <div class="stageTop" role="navigation" aria-label="Navegación de calendario">
           <button id="btnPrev" class="btn icon" type="button" title="Anterior" aria-label="Anterior">◀</button>
 
-          <div class="stageTitle">
+          <div class="stageTitle" aria-label="Título del periodo">
             <div id="titleMain" class="h2">—</div>
             <div id="titleSub" class="muted">—</div>
           </div>
@@ -131,7 +194,7 @@
           <button id="btnNext" class="btn icon" type="button" title="Siguiente" aria-label="Siguiente">▶</button>
         </div>
 
-        <div id="calendar" class="calendar" aria-label="Vista del calendario"></div>
+        <div id="calendar" class="calendar" aria-label="Vista del calendario" role="region"></div>
       </section>
 
       <!-- Right panel -->
@@ -142,18 +205,19 @@
         </div>
         <div id="panelBody" class="panelBody"></div>
       </aside>
+
     </section>
   </main>
 
   <!-- Modal: New/Edit Event -->
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Editar evento">
-    <div class="modalCard">
+    <div class="modalCard" role="document">
       <div class="modalHead">
         <div id="modalTitle" class="modalTitle">Nuevo evento</div>
         <button id="btnCloseModal" class="btn icon" type="button" title="Cerrar" aria-label="Cerrar">✕</button>
       </div>
 
-      <form id="eventForm" class="form grid2">
+      <form id="eventForm" class="form grid2" aria-label="Formulario de evento">
         <label class="field span2">
           <span>Título</span>
           <input id="evTitle" required placeholder="Ej: Pago arriendo / Cumple / Viaje / Cita" />
@@ -171,7 +235,7 @@
 
         <label class="field">
           <span>Categoría</span>
-          <select id="evCategory">
+          <select id="evCategory" aria-label="Categoría">
             <option value="personal">Personal</option>
             <option value="salud">Salud</option>
             <option value="finanzas">Finanzas</option>
@@ -183,11 +247,48 @@
 
         <label class="field">
           <span>Prioridad</span>
-          <select id="evPriority">
+          <select id="evPriority" aria-label="Prioridad">
             <option value="normal">Normal</option>
             <option value="importante">Importante</option>
             <option value="critico">Crítico</option>
           </select>
+        </label>
+
+        <!-- Repetición -->
+        <label class="field">
+          <span>Repetición</span>
+          <select id="evRepeat" aria-label="Repetición">
+            <option value="none">No se repite</option>
+            <option value="daily">Diaria</option>
+            <option value="weekly">Semanal</option>
+            <option value="monthly">Mensual</option>
+            <option value="yearly">Anual</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Cada</span>
+          <select id="evRepeatInterval" aria-label="Intervalo de repetición">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="6">6</option>
+            <option value="12">12</option>
+          </select>
+        </label>
+
+        <label class="field span2">
+          <span>Recordatorios (minutos antes)</span>
+          <input
+            id="evReminders"
+            placeholder="Ej: 5, 60, 1440 (coma separada)"
+            inputmode="numeric"
+            aria-label="Recordatorios en minutos"
+          />
+          <div class="muted" style="font-size:12px;margin-top:6px;">
+            Tip: 5 = 5 min antes, 60 = 1 hora, 1440 = 1 día.
+          </div>
         </label>
 
         <label class="field span2">
@@ -205,9 +306,80 @@
     </div>
   </div>
 
+  <!-- Modal: Settings -->
+  <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Configuración">
+    <div class="modalCard" role="document">
+      <div class="modalHead">
+        <div class="modalTitle">Configuración</div>
+        <button id="btnCloseSettings" class="btn icon" type="button" title="Cerrar" aria-label="Cerrar">✕</button>
+      </div>
+
+      <div class="form" style="margin-top:12px;">
+        <div class="railBlock" style="margin:0;">
+          <div class="railTitle">Calendario Colombia</div>
+
+          <label class="field" style="margin-top:10px;">
+            <span>Festivos de Colombia</span>
+            <select id="setHolidaysCO" aria-label="Festivos Colombia">
+              <option value="on">Mostrar</option>
+              <option value="off">Ocultar</option>
+            </select>
+          </label>
+
+          <div class="muted" style="font-size:12px;line-height:1.35;">
+            (Próximamente) Se generan automáticamente por año, sin que tú metas nada.
+          </div>
+        </div>
+
+        <div class="railBlock" style="margin:0;">
+          <div class="railTitle">Recordatorios por correo</div>
+
+          <label class="field" style="margin-top:10px;">
+            <span>Digest diario</span>
+            <select id="setEmailDigest" aria-label="Digest diario">
+              <option value="on">Activado</option>
+              <option value="off">Desactivado</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Hora del correo</span>
+            <input id="setEmailDigestTime" type="time" value="07:00" aria-label="Hora del digest" />
+          </label>
+
+          <div class="muted" style="font-size:12px;line-height:1.35;">
+            (Próximamente) Un correo con lo de hoy/mañana para que no se les pase nada.
+          </div>
+        </div>
+
+        <div class="railBlock" style="margin:0;">
+          <div class="railTitle">Categorías</div>
+
+          <div class="muted" style="font-size:12px;line-height:1.35;">
+            (Próximamente) Crear/editar categorías, colores y orden. Ya está el cascarón.
+          </div>
+
+          <div id="setCategoriesBox" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+            <!-- ui.js puede pintar aquí el editor -->
+          </div>
+
+          <button id="btnAddCategory" class="btn" type="button">+ Agregar categoría</button>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button id="btnSettingsCancel" class="btn" type="button">Cerrar</button>
+          <button id="btnSettingsSave" class="btn primary" type="button">Guardar</button>
+        </div>
+
+        <div id="settingsMsg" class="msg hidden" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // mini detalle: año automático (no depende de app.js)
-    document.getElementById('year').textContent = new Date().getFullYear();
+    // año automático (no depende de app.js)
+    const y = document.getElementById('year');
+    if (y) y.textContent = new Date().getFullYear();
   </script>
 
   <script type="module" src="./app.js"></script>

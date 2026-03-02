@@ -13,27 +13,44 @@ import {
   getRedirectResult,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
+/**
+ * ALLOWLIST:
+ * - Si está vacía => no bloquea (modo “no me fastidies con config”)
+ * - Si tiene '*' => permite todo
+ * - Si tiene correos => solo esos
+ */
 const ALLOWLIST = new Set([
-  // ⬇️ PON AQUÍ EXACTO los correos permitidos (Alek/Cata)
-  // "alguien@gmail.com",
-  // "otro@dominio.com",
+  // Ej:
+  // "alek@gmail.com",
+  // "cata@gmail.com",
+  // "*",
 ]);
+
+const normEmail = (email) => String(email || '').trim().toLowerCase();
+
+function isAllowed(email){
+  if(!ALLOWLIST.size) return true;
+  if(ALLOWLIST.has('*')) return true;
+  return ALLOWLIST.has(normEmail(email));
+}
 
 function niceAuthError(err){
   const code = err?.code || '';
-  if(code === 'auth/invalid-credential') return "Correo o contraseña incorrectos.";
-  if(code === 'auth/user-not-found') return "Ese usuario no existe.";
-  if(code === 'auth/wrong-password') return "Contraseña incorrecta.";
-  if(code === 'auth/too-many-requests') return "Demasiados intentos. Espera un poquito.";
-  if(code === 'auth/popup-blocked') return "El navegador bloqueó el popup de Google.";
-  if(code === 'auth/popup-closed-by-user') return "Cerraste el popup de Google.";
-  if(code === 'auth/unauthorized-domain') return "Dominio no autorizado en Firebase (Authorized domains).";
-  return err?.message || "Falló el login. Porque el universo quiso.";
-}
-
-function isAllowed(email){
-  if(!ALLOWLIST.size) return true; // si no configuras allowlist, no bloquea
-  return ALLOWLIST.has(String(email || '').toLowerCase().trim());
+  // Mensajes “humanos”, porque Firebase ama el drama.
+  switch(code){
+    case 'auth/invalid-credential': return "Correo o contraseña incorrectos.";
+    case 'auth/user-not-found': return "Ese usuario no existe.";
+    case 'auth/wrong-password': return "Contraseña incorrecta.";
+    case 'auth/too-many-requests': return "Demasiados intentos. Espera un poquito y vuelve a intentar.";
+    case 'auth/popup-blocked': return "El navegador bloqueó el popup de Google. (Permite popups o intenta de nuevo).";
+    case 'auth/popup-closed-by-user': return "Cerraste el popup de Google.";
+    case 'auth/unauthorized-domain': return "Dominio no autorizado en Firebase (Authorized domains).";
+    case 'auth/cancelled-popup-request': return "Se canceló el popup anterior (típico cuando se le da doble click).";
+    case 'auth/network-request-failed': return "Falló la red. Revisa internet y vuelve a intentar.";
+    case 'auth/operation-not-allowed': return "Método de login no habilitado en Firebase (Auth > Sign-in method).";
+    default:
+      return (String(err?.message || '').trim()) || "Falló el login. Porque el universo quiso.";
+  }
 }
 
 export const authApi = (() => {
@@ -43,44 +60,71 @@ export const authApi = (() => {
     onAuthError: () => {},
   };
 
+  let inited = false;
+  let unsubAuth = null;
+
+  async function enforceAllowlistOrSignOut(user){
+    const email = user?.email || '';
+    if(!isAllowed(email)){
+      try{ await signOut(auth); }catch{}
+      throw new Error("Acceso restringido. Ese correo no está en la lista 🔒");
+    }
+    return true;
+  }
+
+  async function finishRedirectIfAny(){
+    // getRedirectResult:
+    // - Si no hubo redirect, normalmente retorna null (o puede lanzar según entorno).
+    // - No queremos “alertas” porque sí.
+    try{
+      const res = await getRedirectResult(auth);
+      // Si res existe, onAuthStateChanged manejará el estado igual.
+      return res || null;
+    }catch(e){
+      // Solo reportamos errores reales útiles.
+      const code = e?.code || '';
+      if(code && code !== 'auth/no-auth-event'){
+        cbs.onAuthError(niceAuthError(e));
+      }
+      return null;
+    }
+  }
+
   function init(callbacks = {}){
     cbs = { ...cbs, ...callbacks };
     initFirebase();
 
-    // Si vienes de redirect de Google, esto lo termina
-    getRedirectResult(auth).catch((e)=>{
-      // No siempre hay redirect result, entonces no molestamos
-      const msg = niceAuthError(e);
-      // Solo muestra si es un error real útil
-      if(e?.code && e.code !== 'auth/no-auth-event') cbs.onAuthError(msg);
-    });
+    // Evita doble init (que duplica listeners y luego todo se siente “poseído”)
+    if(inited) return;
+    inited = true;
 
-    onAuthStateChanged(auth, async (user) => {
+    // Completa flujos de redirect si existen
+    void finishRedirectIfAny();
+
+    // Listener único
+    unsubAuth = onAuthStateChanged(auth, async (user) => {
       if(!user){
         cbs.onSignedOut();
         return;
       }
 
-      const email = user.email || '';
-      if(!isAllowed(email)){
-        await signOut(auth);
-        cbs.onAuthError("Acceso restringido. Ese correo no está en la lista 🔒");
-        return;
+      try{
+        await enforceAllowlistOrSignOut(user);
+        cbs.onSignedIn(user);
+      }catch(e){
+        cbs.onAuthError(niceAuthError(e));
+        cbs.onSignedOut();
       }
-
-      cbs.onSignedIn(user);
     });
   }
 
   async function signInEmail(email, password){
     try{
-      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const em = normEmail(email);
+      const cred = await signInWithEmailAndPassword(auth, em, password);
       const user = cred.user;
 
-      if(!isAllowed(user.email)){
-        await signOut(auth);
-        throw new Error("Acceso restringido. Ese correo no está en la lista 🔒");
-      }
+      await enforceAllowlistOrSignOut(user);
       return user;
     }catch(e){
       throw new Error(niceAuthError(e));
@@ -88,25 +132,26 @@ export const authApi = (() => {
   }
 
   async function signInGoogle(){
-    try{
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
 
+    try{
+      // Intento 1: popup
       try{
         const cred = await signInWithPopup(auth, provider);
         const user = cred.user;
 
-        if(!isAllowed(user.email)){
-          await signOut(auth);
-          throw new Error("Acceso restringido. Ese correo no está en la lista 🔒");
-        }
+        await enforceAllowlistOrSignOut(user);
         return user;
       }catch(e){
-        // Fallback (móvil / webview / popup bloqueado)
+        // Fallback: redirect (móvil/webview/popup bloqueado)
         const code = e?.code || '';
-        if(code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment'){
+        if(
+          code === 'auth/popup-blocked' ||
+          code === 'auth/operation-not-supported-in-this-environment'
+        ){
           await signInWithRedirect(auth, provider);
-          return null; // el flujo continúa tras redirect
+          return null; // onAuthStateChanged se encargará al volver
         }
         throw e;
       }
@@ -123,5 +168,12 @@ export const authApi = (() => {
     }
   }
 
-  return { init, signInEmail, signInGoogle, signOut: signOutNow };
+  // Por si algún día quieres “desmontar” (tests, hot reload, etc.)
+  function dispose(){
+    try{ if(unsubAuth) unsubAuth(); }catch{}
+    unsubAuth = null;
+    inited = false;
+  }
+
+  return { init, signInEmail, signInGoogle, signOut: signOutNow, dispose };
 })();
