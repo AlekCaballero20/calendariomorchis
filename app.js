@@ -1,26 +1,42 @@
 // app.js — Calendar bootstrap + wiring (Auth ⇄ DB ⇄ UI ⇄ Recurrence ⇄ Reminders)
-// v3: más coherente, menos “por qué no aparece lo mío”
-// ✅ Import robusto de recurrence (prefiere ./recurrence.js; fallback a ./holidays-co.js)
-// ✅ Festivos CO inyectados como eventos “system” (si settings.holidaysCO === 'on')
-// ✅ Cache por año de festivos (no recalcula todo cada render)
-// ✅ Settings guardan y refrescan UI + eventos sin romper nada
-// ✅ Reminders siguen igual (in-app + Notifications + mailto helper)
+// v4 responsive / cleaner / safer
+// - Import robusto de recurrence
+// - Festivos CO como eventos system
+// - Cache por año de festivos
+// - Mejor sesión / recarga / recompute
+// - Compatible con ui.js mejorado
 
 import { initFirebase } from './firebase.js';
 import { authApi } from './auth.js';
 import { dbApi } from './db.js';
 import { ui } from './ui.js';
 
-import { holidaysCO } from './settings.js';            // helpers festivos (con stub + ready())
-import { settings as settingsStore } from './stats.js'; // store en memoria (sí, el nombre miente)
+import { holidaysCO } from './settings.js';
+import { settings as settingsStore } from './stats.js';
 import { reminders } from './reminders.js';
 
 (async function main(){
   'use strict';
 
-  // =========================
+  // =========================================================
   // Helpers
-  // =========================
+  // =========================================================
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  const safeDate = (v) => {
+    if(!v) return null;
+    const d = (v instanceof Date) ? new Date(v) : new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const ymd = (d) => {
+    const dd = safeDate(d);
+    if(!dd) return '';
+    return `${dd.getFullYear()}-${pad2(dd.getMonth() + 1)}-${pad2(dd.getDate())}`;
+  };
+
+  const yearNow = () => new Date().getFullYear();
+
   const normalizeErrMsg = (e, fallbackMsg) => {
     const raw = String(e?.message || '').trim();
     if(!raw) return fallbackMsg;
@@ -28,18 +44,21 @@ import { reminders } from './reminders.js';
     const low = raw.toLowerCase();
 
     if(raw.includes('Missing or insufficient permissions')){
-      return 'No tienes permisos en Firestore. Revisa Rules / allowlist 🔒';
+      return 'No tienen permisos en Firestore. Revisen Rules o la allowlist 🔒';
     }
     if(low.includes('failed-precondition') && low.includes('index')){
-      return 'Firestore necesita un índice para esa consulta. Mira la consola: suele darte el link para crearlo.';
+      return 'Firestore necesita un índice para esa consulta. La consola suele soltar el link para crearlo.';
     }
     if(low.includes('network') || low.includes('offline')){
-      return 'Parece un problema de red. Revisa conexión e inténtalo de nuevo.';
+      return 'Parece problema de red. Revisen conexión e inténtenlo otra vez.';
+    }
+    if(low.includes('popup')){
+      return 'El inicio de sesión con popup fue bloqueado o cancelado.';
     }
     return raw;
   };
 
-  const safe = async (fn, fallbackMsg = 'Algo falló. Porque claro que sí.') => {
+  const safe = async (fn, fallbackMsg = 'Algo falló. Porque aparentemente la paz nunca fue una opción.') => {
     try{
       return await fn();
     }catch(e){
@@ -49,33 +68,27 @@ import { reminders } from './reminders.js';
     }
   };
 
-  const pad2 = (n) => String(n).padStart(2,'0');
+  // =========================================================
+  // Expand window
+  // =========================================================
+  // Dejamos una ventana razonable para que el calendario no se sienta hueco
+  // cuando navegan cerca del presente.
+  const getExpandWindow = (cursor = new Date()) => {
+    const c = safeDate(cursor) || new Date();
+    const y = c.getFullYear();
 
-  const safeDate = (v) => {
-    if(!v) return null;
-    const d = (v instanceof Date) ? v : new Date(v);
-    return Number.isNaN(d.getTime()) ? null : d;
-  };
-
-  const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-
-  const nowYear = () => new Date().getFullYear();
-
-  // Ventana de expansión: año anterior → año siguiente (navegar sin “huecos”)
-  const getExpandWindow = () => {
-    const y = nowYear();
     const start = new Date(y - 1, 0, 1, 0, 0, 0, 0);
     const end   = new Date(y + 1, 11, 31, 23, 59, 59, 999);
+
     return { start, end };
   };
 
-  // =========================
-  // Recurrence (import robusto)
-  // =========================
+  // =========================================================
+  // Recurrence
+  // =========================================================
   let recurrence = null;
 
   const loadRecurrence = async () => {
-    // Preferimos recurrence.js (lo correcto)
     try{
       const mod = await import('./recurrence.js');
       if(mod?.recurrence?.expandEvents){
@@ -84,24 +97,23 @@ import { reminders } from './reminders.js';
       }
     }catch{}
 
-    // Fallback: tu proyecto viejo lo tenía “cruzado” en holidays-co.js
     try{
       const mod2 = await import('./holidays-co.js');
       if(mod2?.recurrence?.expandEvents){
         recurrence = mod2.recurrence;
-        console.warn('[app.js] Usando recurrence desde ./holidays-co.js (fallback). Ideal: moverlo a ./recurrence.js');
+        console.warn('[app.js] recurrence cargado desde ./holidays-co.js como fallback. Sí, raro. Pero útil.');
         return recurrence;
       }
     }catch(e){
-      console.error('[app.js] No pude cargar recurrence.', e);
+      console.error('[app.js] No se pudo cargar recurrence.', e);
     }
 
     throw new Error('No se encontró recurrence.expandEvents en ./recurrence.js ni en ./holidays-co.js');
   };
 
-  // =========================
-  // Session + demo
-  // =========================
+  // =========================================================
+  // Session / demo
+  // =========================================================
   let isDemo = false;
 
   let demoEvents = [];
@@ -109,10 +121,21 @@ import { reminders } from './reminders.js';
     holidaysCO: 'on',
     emailDigest: 'on',
     emailDigestTime: '07:00',
+    categories: {
+      personal: { label: 'Personal' },
+      salud: { label: 'Salud' },
+      finanzas: { label: 'Finanzas' },
+      familia: { label: 'Familia' },
+      cumple: { label: 'Cumpleaños' },
+      experiencias: { label: 'Experiencias' },
+      holiday: { label: 'Festivos CO' },
+    },
   };
 
   const demoDb = {
-    async listEvents(){ return demoEvents.slice(); },
+    async listEvents(){
+      return demoEvents.slice();
+    },
     async upsertEvent(data){
       const t = Date.now();
       const item = {
@@ -132,6 +155,7 @@ import { reminders } from './reminders.js';
       const idx = demoEvents.findIndex(e => e.id === item.id);
       if(idx >= 0) demoEvents[idx] = item;
       else demoEvents.push(item);
+
       return item;
     },
     async deleteEvent(id){
@@ -139,40 +163,76 @@ import { reminders } from './reminders.js';
       return true;
     },
     async getSettings(){
-      return { ...demoSettings };
+      return { ...demoSettings, categories: { ...(demoSettings.categories || {}) } };
     },
     async saveSettings(s){
-      demoSettings = { ...demoSettings, ...(s || {}) };
-      return { ...demoSettings };
+      demoSettings = {
+        ...demoSettings,
+        ...(s || {}),
+        categories: { ...(s?.categories || demoSettings.categories || {}) },
+      };
+      return { ...demoSettings, categories: { ...(demoSettings.categories || {}) } };
     },
   };
 
   const activeDb = () => (isDemo ? demoDb : dbApi);
 
   let session = { uid: null, email: null };
+  let authCycle = 0;
 
   const setSession = ({ uid = null, email = null } = {}) => {
     session.uid = uid || null;
     session.email = email || null;
-    // db.js usa este contexto para queries rules-friendly
     try{ dbApi.setContext({ uid: session.uid, email: session.email }); }catch{}
   };
 
   const clearSession = () => setSession({ uid: null, email: null });
 
-  // =========================
-  // Caches
-  // =========================
-  let currentEvents = [];          // raw DB (solo usuario)
-  let currentExpandedEvents = [];  // expanded (usuario + system holidays)
+  // =========================================================
+  // Runtime state
+  // =========================================================
+  let currentEvents = [];
+  let currentExpandedEvents = [];
 
-  // Cache por año de festivos para no recalcular
-  const holidayCache = new Map(); // year -> { map: Map(ymd->name), events: [] }
+  // Cache por año
+  const holidayCache = new Map(); // year -> { map: Map, events: array|null }
+
+  const resetRuntimeEvents = () => {
+    currentEvents = [];
+    currentExpandedEvents = [];
+    ui.setEvents([]);
+  };
+
+  // =========================================================
+  // Holiday helpers
+  // =========================================================
+  const mergeCategoryMaps = (...maps) => {
+    const out = {};
+    for(const m of maps){
+      if(!m || typeof m !== 'object') continue;
+      for(const [k, v] of Object.entries(m)){
+        out[k] = { ...(out[k] || {}), ...(v || {}) };
+      }
+    }
+    return out;
+  };
+
+  const ensureHolidayCategoryInSettings = (s) => {
+    const baseCats = (s?.categories && typeof s.categories === 'object') ? s.categories : {};
+    if(baseCats.holiday) return { ...s, categories: { ...baseCats } };
+
+    return {
+      ...(s || {}),
+      categories: {
+        ...baseCats,
+        holiday: { label: 'Festivos CO' },
+      },
+    };
+  };
 
   const getHolidayMapForYear = async (year) => {
     if(holidayCache.has(year)) return holidayCache.get(year).map;
 
-    // Espera a que settings.js termine de cargar el módulo opcional de festivos
     try{ await holidaysCO.ready(); }catch{}
 
     let map;
@@ -181,8 +241,8 @@ import { reminders } from './reminders.js';
     }catch{
       map = new Map();
     }
+
     if(!(map instanceof Map)){
-      // por si algún día cambia a objeto plano
       map = new Map(Object.entries(map || {}));
     }
 
@@ -198,12 +258,9 @@ import { reminders } from './reminders.js';
     const out = [];
 
     for(const [dateStr, name] of map.entries()){
-      // dateStr esperado: YYYY-MM-DD
       const d = safeDate(`${dateStr}T00:00:00`);
       if(!d) continue;
 
-      // Evento “all-day”: lo representamos como start 00:00 y end null
-      // (tu UI ya tolera end null)
       out.push({
         id: `holiday-${dateStr}`,
         title: `🇨🇴 ${String(name || 'Festivo').trim()}`,
@@ -214,12 +271,12 @@ import { reminders } from './reminders.js';
         notes: 'Festivo de Colombia (auto).',
         createdAt: 0,
         updatedAt: 0,
+        isSystem: true,
         system: true,
       });
     }
 
-    // Orden estable por fecha
-    out.sort((a,b)=>{
+    out.sort((a, b) => {
       const ta = safeDate(a.start)?.getTime() ?? 0;
       const tb = safeDate(b.start)?.getTime() ?? 0;
       return ta - tb;
@@ -229,63 +286,67 @@ import { reminders } from './reminders.js';
     return out;
   };
 
-  const ensureHolidayCategory = (s) => {
-    // Si el usuario tiene categories, añadimos "holiday" si no existe
-    try{
-      const cats = (s && typeof s === 'object' && s.categories && typeof s.categories === 'object')
-        ? s.categories
-        : null;
-
-      if(cats && !cats.holiday){
-        const next = { ...cats, holiday: { label: 'Festivos CO' } };
-        ui.setCategories(next);
-      }else if(!cats){
-        // Si UI está usando defaults, igual intentamos meterla
-        // (ui.js es robusto: no se muere si no existe)
-        ui.setCategories?.({ holiday: { label: 'Festivos CO' } });
-      }
-    }catch{}
+  // =========================================================
+  // Event normalization / expansion
+  // =========================================================
+  const normalizeSavedEvent = (ev) => {
+    if(!ev || typeof ev !== 'object') return null;
+    return {
+      ...ev,
+      title: String(ev.title || '').trim(),
+      category: ev.category || 'personal',
+      priority: ev.priority || 'normal',
+      notes: ev.notes || '',
+      end: ev.end || null,
+    };
   };
 
   const expandUserEvents = (eventsRaw, start, end) => {
-    // expandEvents debe tolerar eventos sin repeat
+    if(!recurrence?.expandEvents) return (eventsRaw || []).slice();
     return recurrence.expandEvents(eventsRaw, start, end);
   };
 
   const mergeSystemEvents = (userExpanded, systemEvents) => {
     const list = (userExpanded || []).slice();
-    const seen = new Set(list.map(e => String(e?.id || '')));
-    for(const ev of (systemEvents || [])){
-      const id = String(ev?.id || '');
-      if(id && seen.has(id)) continue;
-      list.push(ev);
-      if(id) seen.add(id);
+    const seen = new Set();
+
+    for(const ev of list){
+      const key = `${String(ev?.id || '')}::${String(ev?.start || '')}`;
+      seen.add(key);
     }
-    // Orden por start
-    list.sort((a,b)=>{
+
+    for(const ev of (systemEvents || [])){
+      const key = `${String(ev?.id || '')}::${String(ev?.start || '')}`;
+      if(seen.has(key)) continue;
+      list.push(ev);
+      seen.add(key);
+    }
+
+    list.sort((a, b) => {
       const ta = (typeof a?.startMs === 'number') ? a.startMs : (safeDate(a?.start)?.getTime() ?? 0);
       const tb = (typeof b?.startMs === 'number') ? b.startMs : (safeDate(b?.start)?.getTime() ?? 0);
       return ta - tb;
     });
+
     return list;
   };
 
-  const recomputeExpanded = async () => {
-    const { start, end } = getExpandWindow();
+  const recomputeExpanded = async ({ render = true } = {}) => {
+    const { start, end } = getExpandWindow(new Date());
+    const rawSettings = settingsStore.get?.() || {};
+    const holidaysOn = String(rawSettings.holidaysCO || 'off').toLowerCase() !== 'off';
 
-    // 1) eventos del usuario (recurrence)
-    const userExpanded = expandUserEvents(currentEvents, start, end);
-
-    // 2) festivos (system), solo si están ON
-    const s = settingsStore.get?.() || {};
-    const holidaysOn = String(s.holidaysCO || 'off').toLowerCase() !== 'off';
+    let userExpanded = [];
+    try{
+      userExpanded = expandUserEvents(currentEvents, start, end) || [];
+    }catch(e){
+      console.error('[app.js] Error expandiendo recurrencias', e);
+      userExpanded = currentEvents.slice();
+    }
 
     let merged = userExpanded;
 
     if(holidaysOn){
-      ensureHolidayCategory(s);
-
-      // Construimos festivos para todos los años que cubre el rango
       const years = [];
       for(let y = start.getFullYear(); y <= end.getFullYear(); y++) years.push(y);
 
@@ -295,130 +356,162 @@ import { reminders } from './reminders.js';
         allHolidayEvents.push(...evs);
       }
 
-      // Filtra por rango (por si acaso)
-      const inRange = allHolidayEvents.filter(ev=>{
+      const holidayInRange = allHolidayEvents.filter(ev => {
         const d = safeDate(ev.start);
         if(!d) return false;
         const t = d.getTime();
         return t >= start.getTime() && t <= end.getTime();
       });
 
-      merged = mergeSystemEvents(userExpanded, inRange);
+      merged = mergeSystemEvents(userExpanded, holidayInRange);
     }
 
     currentExpandedEvents = merged;
     ui.setEvents(currentExpandedEvents);
+
+    if(render) ui.render();
   };
 
-  // =========================
+  // =========================================================
   // Settings
-  // =========================
-  const applySettingsToUI = (s) => {
-    if(!s || typeof s !== 'object') return;
+  // =========================================================
+  const applySettingsToUI = (incoming) => {
+    const base = (incoming && typeof incoming === 'object') ? incoming : {};
+    const holidaysOn = String(base.holidaysCO || 'off').toLowerCase() !== 'off';
 
-    // Store (para reminders/logic)
-    try{ settingsStore.set(s); }catch{}
+    const normalized = holidaysOn
+      ? ensureHolidayCategoryInSettings(base)
+      : {
+          ...base,
+          categories: { ...(base.categories || {}) }
+        };
 
-    // UI modal shell
-    try{ ui.setSettings(s); }catch{}
+    try{ settingsStore.set(normalized); }catch{}
+    try{ ui.setSettings(normalized); }catch{}
 
-    // categorías dinámicas
-    if(s.categories && typeof s.categories === 'object'){
-      try{ ui.setCategories(s.categories); }catch{}
+    const uiCats = mergeCategoryMaps(
+      normalized.categories || {},
+      holidaysOn ? { holiday: { label: 'Festivos CO' } } : {}
+    );
+
+    if(Object.keys(uiCats).length){
+      try{ ui.setCategories(uiCats); }catch{}
     }
+  };
 
-    // Si festivos ON, garantizamos categoría “holiday”
+  const getDefaultSettings = () => {
     try{
-      const holidaysOn = String(s.holidaysCO || 'off').toLowerCase() !== 'off';
-      if(holidaysOn) ensureHolidayCategory(s);
-    }catch{}
+      settingsStore.reset?.();
+      const s = settingsStore.get?.() || {
+        holidaysCO: 'on',
+        emailDigest: 'on',
+        emailDigestTime: '07:00',
+        categories: {},
+      };
+      return ensureHolidayCategoryInSettings(s);
+    }catch{
+      return ensureHolidayCategoryInSettings({
+        holidaysCO: 'on',
+        emailDigest: 'on',
+        emailDigestTime: '07:00',
+        categories: {},
+      });
+    }
   };
 
   const loadSettings = async () => {
     const opts = (!isDemo && session.uid) ? { uid: session.uid } : {};
+
     const s = await safe(
       () => activeDb().getSettings ? activeDb().getSettings(opts) : Promise.resolve(null),
-      'No pude cargar configuración.'
+      'No se pudo cargar la configuración.'
     );
 
-    if(s){
-      applySettingsToUI(s);
-      return s;
-    }
-
-    // Defaults si backend no devolvió nada
-    try{ settingsStore.reset(); }catch{}
-    try{ ui.setSettings(settingsStore.get()); }catch{}
-    try{
-      const d = settingsStore.get?.() || {};
-      if(String(d.holidaysCO || 'off').toLowerCase() !== 'off') ensureHolidayCategory(d);
-    }catch{}
-    return null;
+    const finalSettings = s || getDefaultSettings();
+    applySettingsToUI(finalSettings);
+    return finalSettings;
   };
 
-  // =========================
+  // =========================================================
   // Events
-  // =========================
+  // =========================================================
   const loadEvents = async () => {
     const opts = (!isDemo && session.uid) ? { uid: session.uid } : {};
+
     const events = await safe(
       () => activeDb().listEvents(opts),
-      'No pude cargar eventos.'
+      'No se pudieron cargar los eventos.'
     );
 
-    if(events){
-      currentEvents = events.slice();
-      await recomputeExpanded();
-    }else{
-      currentEvents = [];
-      await recomputeExpanded();
-    }
+    currentEvents = Array.isArray(events)
+      ? events.map(normalizeSavedEvent).filter(Boolean)
+      : [];
 
+    await recomputeExpanded({ render: false });
     ui.render();
-    return events;
+    return currentEvents;
   };
 
-  const loadAndRender = async () => {
-    // settings primero (chips/labels), luego eventos
+  const loadAndRender = async (guardToken = authCycle) => {
     await loadSettings();
+    if(guardToken !== authCycle) return;
+
     await loadEvents();
+    if(guardToken !== authCycle) return;
+
+    ui.render();
   };
 
   const upsertLocalRaw = (saved) => {
-    const i = currentEvents.findIndex(e => e.id === saved.id);
-    if(i >= 0) currentEvents[i] = saved;
-    else currentEvents.push(saved);
+    const clean = normalizeSavedEvent(saved);
+    if(!clean?.id) return;
+
+    const i = currentEvents.findIndex(e => e.id === clean.id);
+    if(i >= 0) currentEvents[i] = clean;
+    else currentEvents.push(clean);
   };
 
   const removeLocalRaw = (id) => {
     currentEvents = currentEvents.filter(e => e.id !== id);
   };
 
-  // =========================
-  // Init Firebase + UI
-  // =========================
+  // =========================================================
+  // Firebase + UI init
+  // =========================================================
   initFirebase();
   ui.init();
 
-  // Load recurrence engine before anything that expands events
-  await safe(loadRecurrence, 'No pude inicializar el motor de recurrencias.');
+  await safe(
+    loadRecurrence,
+    'No se pudo inicializar el motor de recurrencias.'
+  );
 
-  // =========================
+  // =========================================================
   // Reminders
-  // =========================
+  // =========================================================
   reminders.init({
     getEvents: () => currentExpandedEvents,
-    getSettings: () => settingsStore.get(),
+    getSettings: () => settingsStore.get?.() || {},
     notify: ({ title, body }) => {
-      try{ ui.showMsg(`${title}${body ? `\n${body}` : ''}`); }catch{}
+      try{
+        ui.showMsg(`${title}${body ? `\n${body}` : ''}`);
+      }catch{}
     }
   });
 
-  // =========================
+  const restartReminders = () => {
+    try{ reminders.stop?.(); }catch{}
+    try{ reminders.start?.(); }catch{}
+  };
+
+  // =========================================================
   // Auth wiring
-  // =========================
+  // =========================================================
   authApi.init({
     onSignedIn: async (user) => {
+      authCycle++;
+      const myCycle = authCycle;
+
       isDemo = false;
 
       const email = user?.email || '';
@@ -430,17 +523,21 @@ import { reminders } from './reminders.js';
       ui.showApp();
       ui.showAuthMsg('');
 
-      await loadAndRender();
+      await loadAndRender(myCycle);
+      if(myCycle !== authCycle) return;
 
-      try{ reminders.start(); }catch{}
+      restartReminders();
     },
 
     onSignedOut: () => {
+      authCycle++;
+
       isDemo = false;
       clearSession();
 
-      try{ reminders.stop(); }catch{}
+      try{ reminders.stop?.(); }catch{}
 
+      resetRuntimeEvents();
       ui.setUser(null);
       ui.showAuth();
     },
@@ -450,9 +547,9 @@ import { reminders } from './reminders.js';
     },
   });
 
-  // =========================
+  // =========================================================
   // UI actions
-  // =========================
+  // =========================================================
   ui.onLogin(async ({ email, password }) => safe(
     () => authApi.signInEmail(email, password),
     'No se pudo iniciar sesión.'
@@ -463,13 +560,14 @@ import { reminders } from './reminders.js';
     'No se pudo iniciar sesión con Google.'
   ));
 
-  // Demo: solo si existe el botón/handler en UI (no rompe si no hay)
   ui.onDemo(async () => {
+    authCycle++;
     isDemo = true;
     clearSession();
 
     ui.setUser('demo@alek-y-cata.local');
     ui.showApp();
+    ui.showAuthMsg('');
 
     const now = new Date();
     const iso = (d) => new Date(d).toISOString();
@@ -483,7 +581,7 @@ import { reminders } from './reminders.js';
         end: null,
         category: 'finanzas',
         priority: 'critico',
-        notes: 'Demo: esto se guarda solo en memoria (no Firestore).',
+        notes: 'Demo: esto vive solo en memoria.',
         reminders: [60, 1440],
         createdAt: stamp,
         updatedAt: stamp,
@@ -507,7 +605,7 @@ import { reminders } from './reminders.js';
         end: null,
         category: 'cumple',
         priority: 'normal',
-        notes: 'Solo para probar badges y panel.',
+        notes: 'Para probar badges, panel y recurrencia.',
         repeat: { freq: 'yearly', interval: 1 },
         reminders: [1440],
         createdAt: stamp,
@@ -520,13 +618,13 @@ import { reminders } from './reminders.js';
         end: null,
         category: 'experiencias',
         priority: 'normal',
-        notes: 'A ver si la vida coopera.',
+        notes: 'A ver si la vida deja.',
         createdAt: stamp,
         updatedAt: stamp,
       },
     ];
 
-    demoSettings = {
+    demoSettings = ensureHolidayCategoryInSettings({
       holidaysCO: 'on',
       emailDigest: 'on',
       emailDigestTime: '07:00',
@@ -537,24 +635,31 @@ import { reminders } from './reminders.js';
         familia: { label: 'Familia' },
         cumple: { label: 'Cumpleaños' },
         experiencias: { label: 'Experiencias' },
-        holiday: { label: 'Festivos CO' },
       },
-    };
+    });
 
-    await loadAndRender();
-    try{ reminders.start(); }catch{}
+    await loadAndRender(authCycle);
+    restartReminders();
   });
 
   ui.onLogout(async () => {
     if(isDemo){
+      authCycle++;
       isDemo = false;
       clearSession();
-      try{ reminders.stop(); }catch{}
+
+      try{ reminders.stop?.(); }catch{}
+
+      resetRuntimeEvents();
       ui.setUser(null);
       ui.showAuth();
       return;
     }
-    await safe(() => authApi.signOut(), 'No se pudo cerrar sesión.');
+
+    await safe(
+      () => authApi.signOut(),
+      'No se pudo cerrar sesión.'
+    );
   });
 
   ui.onCreateEvent(async (data) => {
@@ -565,7 +670,7 @@ import { reminders } from './reminders.js';
     if(!saved) return;
 
     upsertLocalRaw(saved);
-    await recomputeExpanded();
+    await recomputeExpanded({ render: false });
     ui.render();
   });
 
@@ -577,29 +682,37 @@ import { reminders } from './reminders.js';
     if(!ok) return;
 
     removeLocalRaw(id);
-    await recomputeExpanded();
+    await recomputeExpanded({ render: false });
     ui.render();
   });
 
-  // =========================
-  // Settings wiring (⚙️)
-  // =========================
   ui.onSaveSettings(async (settings) => {
     const opts = (!isDemo && session.uid) ? { uid: session.uid } : {};
 
+    const normalizedSettings = {
+      ...(settings || {}),
+      categories: { ...(settings?.categories || {}) },
+    };
+
     const saved = await safe(
       () => activeDb().saveSettings
-        ? activeDb().saveSettings(settings, opts)
+        ? activeDb().saveSettings(normalizedSettings, opts)
         : Promise.resolve(null),
       'No se pudo guardar la configuración.'
     );
 
-    const next = saved || settings;
-    if(next) applySettingsToUI(next);
+    const next = saved || normalizedSettings;
+    applySettingsToUI(next);
 
-    // Al cambiar settings (incluye toggle de festivos), recomputamos y render
-    await recomputeExpanded();
+    await recomputeExpanded({ render: false });
     ui.render();
+    restartReminders();
   });
+
+  // =========================================================
+  // Estado inicial
+  // =========================================================
+  // authApi.init debería resolver la vista real. Mientras tanto, mostramos auth.
+  ui.showAuth();
 
 })();
