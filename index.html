@@ -1,13 +1,13 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es-CO">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 
-  <title>Calendario · Alek &amp; Cata</title>
+  <title>Calendario - Alek &amp; Cata</title>
   <meta
     name="description"
-    content="Calendario privado de Alek & Cata. Eventos, recurrencias, recordatorios y configuración."
+    content="Calendario privado de Alek y Cata. Eventos, recurrencias, recordatorios y configuracion."
   />
 
   <!-- UX -->
@@ -16,10 +16,10 @@
   <meta name="format-detection" content="telephone=no" />
 
   <!-- Social -->
-  <meta property="og:title" content="Calendario · Alek &amp; Cata" />
+  <meta property="og:title" content="Calendario - Alek &amp; Cata" />
   <meta
     property="og:description"
-    content="Calendario privado. Eventos, recurrencias, recordatorios y configuración."
+    content="Calendario privado. Eventos, recurrencias, recordatorios y configuracion."
   />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary" />
@@ -32,18 +32,18 @@
 
   <noscript>
     <div class="noscript">
-      Este calendario necesita JavaScript para funcionar. La web moderna decidió que sufrir era una feature 🙃
+      Este calendario necesita JavaScript para funcionar.
     </div>
   </noscript>
 
   <!-- Topbar -->
   <header class="topbar" role="banner">
     <div class="brand" aria-label="Calendario privado">
-      <div class="logo" aria-hidden="true">📆</div>
+      <div class="logo" aria-hidden="true">CM</div>
 
       <div class="brandText">
         <div class="title">Calendario</div>
-        <div class="subtitle">Alek &amp; Cata · privado</div>
+        <div class="subtitle">Alek y Cata - privado</div>
       </div>
     </div>
 
@@ -59,19 +59,19 @@
         id="btnSettings"
         class="btn icon ghost hidden"
         type="button"
-        title="Configuración"
-        aria-label="Abrir configuración"
+        title="Configuracion"
+        aria-label="Abrir configuracion"
         aria-haspopup="dialog"
         aria-controls="settingsModal"
       >
-        ⚙️
+        Config
       </button>
 
       <button
         id="btnLogout"
         class="btn hidden"
         type="button"
-        aria-label="Cerrar sesión"
+        aria-label="Cerrar sesion"
       >
         Salir
       </button>
@@ -89,8 +89,7 @@
       <h1 id="authTitle">Entrar</h1>
 
       <p class="muted">
-        Acceso restringido. Si no son Alek o Cata, no van a poder entrar.
-        No es personal, solo que dejar todo abierto sería una idea bien flojita 😌
+        Acceso privado para ustedes dos.
       </p>
 
       <form
@@ -99,50 +98,11 @@
         autocomplete="on"
         aria-label="Formulario de ingreso"
       >
-        <label class="field">
-          <span>Correo</span>
-          <input
-            id="email"
-            type="email"
-            autocomplete="email"
-            inputmode="email"
-            autocapitalize="none"
-            spellcheck="false"
-            required
-            autofocus
-            placeholder="correo@dominio.com"
-            aria-label="Correo"
-          />
-        </label>
-
-        <label class="field">
-          <span>Contraseña</span>
-          <input
-            id="password"
-            type="password"
-            autocomplete="current-password"
-            required
-            placeholder="••••••••"
-            aria-label="Contraseña"
-          />
-        </label>
-
-        <button class="btn primary w100" type="submit">Entrar</button>
-
-        <div
-          class="divider"
-          role="separator"
-          aria-label="Alternativa de ingreso"
-        >
-          <span>o</span>
-        </div>
-
-        <button id="btnGoogle" class="btn w100" type="button">
+        <button id="btnGoogle" class="btn primary w100" type="button" autofocus>
           Entrar con Google
         </button>
-
         <p class="hint">
-          El acceso real está controlado por Firebase (Auth + Rules). No hay modo demo ni atajos creativos.
+          El acceso esta controlado por Firebase. Solo entra quien este autorizado con Google.
         </p>
       </form>
 
@@ -158,7 +118,7 @@
         class="muted"
         style="margin-top:10px;font-size:12px;opacity:.85;"
       >
-        © <span id="year"></span> Alek &amp; Cata
+        (c) <span id="year"></span> Alek &amp; Cata
       </div>
     </section>
   </main>
@@ -168,7 +128,7 @@
     id="appScreen"
     class="screen hidden"
     role="main"
-    aria-label="Aplicación del calendario"
+    aria-label="Aplicacion del calendario"
   >
     <section id="mainApp" class="layout" aria-label="Calendario y paneles">
       <!-- Left rail -->
@@ -242,7 +202,7 @@
           <div
             id="filterChips"
             class="chips"
-            aria-label="Filtros por categoría"
+            aria-label="Filtros por categoria"
           ></div>
         </div>
 
@@ -292,7 +252,7 @@
         <div
           class="stageTop"
           role="navigation"
-          aria-label="Navegación del calendario"
+          aria-label="Navegacion del calendario"
         >
           <button
             id="btnPrev"
@@ -301,12 +261,12 @@
             title="Periodo anterior"
             aria-label="Ir al periodo anterior"
           >
-            ◀
+            <
           </button>
 
           <div class="stageTitle" aria-live="polite" aria-atomic="true">
-            <div id="titleMain" class="h2">—</div>
-            <div id="titleSub" class="muted">—</div>
+            <div id="titleMain" class="h2">-</div>
+            <div id="titleSub" class="muted">-</div>
           </div>
 
           <button
@@ -316,7 +276,7 @@
             title="Periodo siguiente"
             aria-label="Ir al periodo siguiente"
           >
-            ▶
+            >
           </button>
         </div>
 
@@ -339,7 +299,7 @@
         id="panel"
         class="panel hidden"
         aria-live="polite"
-        aria-label="Detalle del evento o día"
+        aria-label="Detalle del evento o dia"
       >
         <div class="panelHead">
           <div class="panelTitle">Detalle</div>
@@ -351,7 +311,7 @@
             title="Cerrar detalle"
             aria-label="Cerrar panel de detalle"
           >
-            ✕
+            x
           </button>
         </div>
 
@@ -379,18 +339,18 @@
           title="Cerrar"
           aria-label="Cerrar formulario de evento"
         >
-          ✕
+          x
         </button>
       </div>
 
       <form id="eventForm" class="form grid2" aria-label="Formulario de evento">
         <label class="field span2">
-          <span>Título</span>
+          <span>Titulo</span>
           <input
             id="evTitle"
             required
             placeholder="Ej: Pago arriendo / Cumple / Viaje / Cita"
-            aria-label="Título del evento"
+            aria-label="Titulo del evento"
           />
         </label>
 
@@ -405,13 +365,13 @@
         </label>
 
         <label class="field">
-          <span>Categoría</span>
-          <select id="evCategory" aria-label="Categoría">
+          <span>Categoria</span>
+          <select id="evCategory" aria-label="Categoria">
             <option value="personal">Personal</option>
             <option value="salud">Salud</option>
             <option value="finanzas">Finanzas</option>
             <option value="familia">Familia</option>
-            <option value="cumple">Cumpleaños</option>
+            <option value="cumple">Cumpleanos</option>
             <option value="experiencias">Experiencias</option>
           </select>
         </label>
@@ -421,13 +381,13 @@
           <select id="evPriority" aria-label="Prioridad">
             <option value="normal">Normal</option>
             <option value="importante">Importante</option>
-            <option value="critico">Crítico</option>
+            <option value="critico">Critico</option>
           </select>
         </label>
 
         <label class="field">
-          <span>Repetición</span>
-          <select id="evRepeat" aria-label="Repetición">
+          <span>Repeticion</span>
+          <select id="evRepeat" aria-label="Repeticion">
             <option value="none">No se repite</option>
             <option value="daily">Diaria</option>
             <option value="weekly">Semanal</option>
@@ -438,7 +398,7 @@
 
         <label class="field">
           <span>Cada</span>
-          <select id="evRepeatInterval" aria-label="Intervalo de repetición">
+          <select id="evRepeatInterval" aria-label="Intervalo de repeticion">
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
@@ -457,7 +417,7 @@
             aria-label="Recordatorios en minutos antes del evento"
           />
           <div class="small" style="margin-top:6px;">
-            5 = 5 min antes, 60 = 1 hora, 1440 = 1 día.
+            5 = 5 min antes, 60 = 1 hora, 1440 = 1 dia.
           </div>
         </label>
 
@@ -500,16 +460,16 @@
   >
     <div class="modalCard" role="document">
       <div class="modalHead">
-        <div id="settingsTitle" class="modalTitle">Configuración</div>
+        <div id="settingsTitle" class="modalTitle">Configuracion</div>
 
         <button
           id="btnCloseSettings"
           class="btn icon"
           type="button"
           title="Cerrar"
-          aria-label="Cerrar configuración"
+          aria-label="Cerrar configuracion"
         >
-          ✕
+          x
         </button>
       </div>
 
@@ -552,15 +512,19 @@
           </label>
 
           <div class="small" style="line-height:1.4;">
-            Para resumir lo de hoy o mañana y evitar esas sorpresas deliciosas de “se nos pasó”.
+            Hoy solo queda listo el digest localmente. Para envio automatico real hace falta conectar un servicio de correo.
           </div>
+
+          <button id="btnTestDigest" class="btn" type="button" style="margin-top:10px;">
+            Probar digest ahora
+          </button>
         </section>
 
         <section class="railBlock" style="margin:0;" aria-labelledby="settingsCategoriesTitle">
-          <div id="settingsCategoriesTitle" class="railTitle">Categorías</div>
+          <div id="settingsCategoriesTitle" class="railTitle">Categorias</div>
 
           <div class="small" style="line-height:1.4;">
-            Espacio para editar categorías, colores y orden sin volver esto una excavación arqueológica.
+            Espacio para editar categorias, colores y orden sin volver esto una excavacion arqueologica.
           </div>
 
           <div
@@ -569,11 +533,11 @@
             style="margin-top:10px;"
             aria-live="polite"
           >
-            <!-- ui.js puede pintar aquí -->
+            <!-- ui.js puede pintar aqui -->
           </div>
 
           <button id="btnAddCategory" class="btn" type="button" style="margin-top:10px;">
-            + Agregar categoría
+            + Agregar categoria
           </button>
         </section>
 

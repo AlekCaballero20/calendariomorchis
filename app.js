@@ -1,15 +1,16 @@
-// app.js — Calendar bootstrap + wiring (Auth ⇄ DB ⇄ UI ⇄ Recurrence ⇄ Reminders)
+// app.js - Calendar bootstrap + wiring (Auth <-> DB <-> UI <-> Recurrence <-> Reminders)
 // v4 responsive / cleaner / safer
 // - Import robusto de recurrence
 // - Festivos CO como eventos system
-// - Cache por año de festivos
-// - Mejor sesión / recarga / recompute
+// - Cache por ano de festivos
+// - Mejor sesion / recarga / recompute
 // - Compatible con ui.js mejorado
 
 import { initFirebase } from './firebase.js';
 import { authApi } from './auth.js';
 import { dbApi } from './db.js';
 import { ui } from './ui.js';
+import { getDefaultCategories, pad2, safeDate } from './shared.js';
 
 import { holidaysCO } from './settings.js';
 import { settings as settingsStore } from './stats.js';
@@ -21,14 +22,6 @@ import { reminders } from './reminders.js';
   // =========================================================
   // Helpers
   // =========================================================
-  const pad2 = (n) => String(n).padStart(2, '0');
-
-  const safeDate = (v) => {
-    if(!v) return null;
-    const d = (v instanceof Date) ? new Date(v) : new Date(v);
-    return Number.isNaN(d.getTime()) ? null : d;
-  };
-
   const ymd = (d) => {
     const dd = safeDate(d);
     if(!dd) return '';
@@ -44,21 +37,21 @@ import { reminders } from './reminders.js';
     const low = raw.toLowerCase();
 
     if(raw.includes('Missing or insufficient permissions')){
-      return 'No tienen permisos en Firestore. Revisen Rules o la allowlist 🔒';
+      return 'No tienen permisos en Firestore. Revisen Rules o la allowlist.';
     }
     if(low.includes('failed-precondition') && low.includes('index')){
-      return 'Firestore necesita un índice para esa consulta. La consola suele soltar el link para crearlo.';
+      return 'Firestore necesita un indice para esa consulta. La consola suele soltar el link para crearlo.';
     }
     if(low.includes('network') || low.includes('offline')){
-      return 'Parece problema de red. Revisen conexión e inténtenlo otra vez.';
+      return 'Parece problema de red. Revisen conexion e intentenlo otra vez.';
     }
     if(low.includes('popup')){
-      return 'El inicio de sesión con popup fue bloqueado o cancelado.';
+      return 'El inicio de sesion con popup fue bloqueado o cancelado.';
     }
     return raw;
   };
 
-  const safe = async (fn, fallbackMsg = 'Algo falló. Porque aparentemente la paz nunca fue una opción.') => {
+  const safe = async (fn, fallbackMsg = 'Algo fallo. Porque aparentemente la paz nunca fue una opcion.') => {
     try{
       return await fn();
     }catch(e){
@@ -101,14 +94,14 @@ import { reminders } from './reminders.js';
       const mod2 = await import('./holidays-co.js');
       if(mod2?.recurrence?.expandEvents){
         recurrence = mod2.recurrence;
-        console.warn('[app.js] recurrence cargado desde ./holidays-co.js como fallback. Sí, raro. Pero útil.');
+        console.warn('[app.js] recurrence cargado desde ./holidays-co.js como fallback. Si, raro. Pero util.');
         return recurrence;
       }
     }catch(e){
       console.error('[app.js] No se pudo cargar recurrence.', e);
     }
 
-    throw new Error('No se encontró recurrence.expandEvents en ./recurrence.js ni en ./holidays-co.js');
+    throw new Error('No se encontro recurrence.expandEvents en ./recurrence.js ni en ./holidays-co.js');
   };
 
   // =========================================================
@@ -121,15 +114,7 @@ import { reminders } from './reminders.js';
     holidaysCO: 'on',
     emailDigest: 'on',
     emailDigestTime: '07:00',
-    categories: {
-      personal: { label: 'Personal' },
-      salud: { label: 'Salud' },
-      finanzas: { label: 'Finanzas' },
-      familia: { label: 'Familia' },
-      cumple: { label: 'Cumpleaños' },
-      experiencias: { label: 'Experiencias' },
-      holiday: { label: 'Festivos CO' },
-    },
+    categories: getDefaultCategories({ includeHoliday: true }),
   };
 
   const demoDb = {
@@ -194,7 +179,7 @@ import { reminders } from './reminders.js';
   let currentEvents = [];
   let currentExpandedEvents = [];
 
-  // Cache por año
+  // Cache por ano
   const holidayCache = new Map(); // year -> { map: Map, events: array|null }
 
   const resetRuntimeEvents = () => {
@@ -263,7 +248,7 @@ import { reminders } from './reminders.js';
 
       out.push({
         id: `holiday-${dateStr}`,
-        title: `🇨🇴 ${String(name || 'Festivo').trim()}`,
+        title: `CO ${String(name || 'Festivo').trim()}`,
         start: new Date(d).toISOString(),
         end: null,
         category: 'holiday',
@@ -424,7 +409,7 @@ import { reminders } from './reminders.js';
 
     const s = await safe(
       () => activeDb().getSettings ? activeDb().getSettings(opts) : Promise.resolve(null),
-      'No se pudo cargar la configuración.'
+      'No se pudo cargar la configuracion.'
     );
 
     const finalSettings = s || getDefaultSettings();
@@ -550,14 +535,9 @@ import { reminders } from './reminders.js';
   // =========================================================
   // UI actions
   // =========================================================
-  ui.onLogin(async ({ email, password }) => safe(
-    () => authApi.signInEmail(email, password),
-    'No se pudo iniciar sesión.'
-  ));
-
   ui.onGoogle(async () => safe(
     () => authApi.signInGoogle(),
-    'No se pudo iniciar sesión con Google.'
+    'No se pudo iniciar sesion con Google.'
   ));
 
   ui.onDemo(async () => {
@@ -576,7 +556,7 @@ import { reminders } from './reminders.js';
     demoEvents = [
       {
         id: 'demo-1',
-        title: '💰 Pago arriendo (demo)',
+        title: 'Pago arriendo (demo)',
         start: iso(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0)),
         end: null,
         category: 'finanzas',
@@ -588,7 +568,7 @@ import { reminders } from './reminders.js';
       },
       {
         id: 'demo-2',
-        title: '🩺 Cita / salud (demo)',
+        title: 'Cita / salud (demo)',
         start: iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 16, 30)),
         end: null,
         category: 'salud',
@@ -600,7 +580,7 @@ import { reminders } from './reminders.js';
       },
       {
         id: 'demo-3',
-        title: '🎂 Cumple (demo)',
+        title: 'Cumple (demo)',
         start: iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 3, 12, 0)),
         end: null,
         category: 'cumple',
@@ -613,7 +593,7 @@ import { reminders } from './reminders.js';
       },
       {
         id: 'demo-4',
-        title: '✨ Plan chill (demo)',
+        title: 'Plan chill (demo)',
         start: iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 5, 19, 0)),
         end: null,
         category: 'experiencias',
@@ -628,14 +608,7 @@ import { reminders } from './reminders.js';
       holidaysCO: 'on',
       emailDigest: 'on',
       emailDigestTime: '07:00',
-      categories: {
-        personal: { label: 'Personal' },
-        salud: { label: 'Salud' },
-        finanzas: { label: 'Finanzas' },
-        familia: { label: 'Familia' },
-        cumple: { label: 'Cumpleaños' },
-        experiencias: { label: 'Experiencias' },
-      },
+      categories: getDefaultCategories(),
     });
 
     await loadAndRender(authCycle);
@@ -658,7 +631,7 @@ import { reminders } from './reminders.js';
 
     await safe(
       () => authApi.signOut(),
-      'No se pudo cerrar sesión.'
+      'No se pudo cerrar sesion.'
     );
   });
 
@@ -698,7 +671,7 @@ import { reminders } from './reminders.js';
       () => activeDb().saveSettings
         ? activeDb().saveSettings(normalizedSettings, opts)
         : Promise.resolve(null),
-      'No se pudo guardar la configuración.'
+      'No se pudo guardar la configuracion.'
     );
 
     const next = saved || normalizedSettings;
@@ -709,10 +682,36 @@ import { reminders } from './reminders.js';
     restartReminders();
   });
 
+  ui.onTestDigest(async () => {
+    const recipients = session.email ? [session.email] : [];
+
+    const result = await safe(
+      () => reminders.sendDailyDigestNow({
+        to: recipients,
+        day: new Date(),
+        includeTomorrow: true,
+      }),
+      'No se pudo preparar el digest de prueba.'
+    );
+
+    if(!result) return;
+
+    if(result.mode === 'mailto'){
+      ui.showMsg(
+        recipients.length
+          ? `Se abrio el borrador del digest para ${recipients[0]}. Ojo: esto no envia solo el correo.`
+          : 'Se abrio el borrador del digest, pero no habia destinatario cargado.'
+      );
+      return;
+    }
+
+    ui.showMsg('El digest de prueba se envio con el backend configurado.');
+  });
+
   // =========================================================
   // Estado inicial
   // =========================================================
-  // authApi.init debería resolver la vista real. Mientras tanto, mostramos auth.
+  // authApi.init deberia resolver la vista real. Mientras tanto, mostramos auth.
   ui.showAuth();
 
 })();

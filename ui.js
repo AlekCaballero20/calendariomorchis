@@ -1,291 +1,65 @@
-// ui.js — Calendar UI (Month / Week / Agenda) + Modals + Filters + Settings
+// ui.js - Calendar UI (Month / Week / Agenda) + Modals + Filters + Settings
 // vNext+ responsive / cleaned / mobile-friendlier
-// Mantiene API pública de app.js
+// Mantiene API publica de app.js
 
 'use strict';
 
-const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
-const DEFAULT_CATEGORIES = {
-  personal:     { label: "Personal" },
-  salud:        { label: "Salud" },
-  finanzas:     { label: "Finanzas" },
-  familia:      { label: "Familia" },
-  cumple:       { label: "Cumpleaños" },
-  experiencias: { label: "Experiencias" },
-};
+import { asOnOff, pad2, safeDate } from './shared.js';
+import {
+  createBtn,
+  createDiv,
+  createMuted,
+  createPill,
+  dayKey,
+  DAYS,
+  DEFAULT_CATEGORIES,
+  endOfMonth,
+  endOfWeekSaturday,
+  escapeText,
+  eventCategoryLabel,
+  eventEnd,
+  eventStart,
+  formatLongDate,
+  formatMediumDate,
+  formatTime,
+  formatWeekRange,
+  getFocusable,
+  getMonthMaxBadges,
+  getWeekMaxBadges,
+  inRange,
+  isMobile,
+  isTabletDown,
+  MONTHS,
+  monthKeyFromYM,
+  normalizeRepeat,
+  normalizeView,
+  normKey,
+  parseRemindersInput,
+  readDigestEvidence,
+  remindersToInput,
+  sameDay,
+  sortEventsByStart,
+  startOfDay,
+  startOfMonth,
+  startOfWeekSunday,
+  toISOInputValue,
+  uniqKey,
+  weekKeyFromSunday,
+} from './ui-helpers.js';
+import {
+  buildSettingsPayload,
+  buildSettingsStateUpdate,
+  ensureCategoryFilters,
+  ensurePersonalCategory,
+  getEffectiveCategories,
+  normalizeEmailDigestTime,
+  sortCategoryKeys,
+} from './ui-settings.js';
 
 const LS_SENT_KEY = 'cal_reminders_sent_v1';
 
 function $(id){ return document.getElementById(id); }
 function on(el, evt, fn){ if(el) el.addEventListener(evt, fn); }
-
-function pad2(n){ return String(n).padStart(2, '0'); }
-
-function safeDate(v){
-  if(!v) return null;
-  const d = (v instanceof Date) ? new Date(v) : new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function toISOInputValue(dateLike){
-  if(!dateLike) return '';
-  const d = safeDate(dateLike);
-  if(!d) return '';
-  const yyyy = d.getFullYear();
-  const mm = pad2(d.getMonth() + 1);
-  const dd = pad2(d.getDate());
-  const hh = pad2(d.getHours());
-  const mi = pad2(d.getMinutes());
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-}
-
-function startOfMonth(y, m){ return new Date(y, m, 1, 0, 0, 0, 0); }
-function endOfMonth(y, m){ return new Date(y, m + 1, 0, 23, 59, 59, 999); }
-
-function startOfDay(d){
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function endOfDay(d){
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
-}
-
-function startOfWeekSunday(d){
-  const x = startOfDay(d);
-  x.setDate(x.getDate() - x.getDay());
-  return x;
-}
-
-function endOfWeekSaturday(d){
-  const x = startOfWeekSunday(d);
-  x.setDate(x.getDate() + 6);
-  return endOfDay(x);
-}
-
-function sameDay(a, b){
-  return a.getFullYear() === b.getFullYear()
-    && a.getMonth() === b.getMonth()
-    && a.getDate() === b.getDate();
-}
-
-function inRange(date, start, end){
-  const t = date.getTime();
-  return t >= start.getTime() && t <= end.getTime();
-}
-
-function formatTime(d){
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
-function formatLongDate(d){
-  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function formatMediumDate(d){
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function formatWeekRange(start, end){
-  if(!start || !end) return '—';
-  if(start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()){
-    return `${start.getDate()} - ${end.getDate()} ${MONTHS[start.getMonth()]} ${start.getFullYear()}`;
-  }
-  if(start.getFullYear() === end.getFullYear()){
-    return `${start.getDate()} ${MONTHS[start.getMonth()]} - ${end.getDate()} ${MONTHS[end.getMonth()]} ${start.getFullYear()}`;
-  }
-  return `${formatMediumDate(start)} - ${formatMediumDate(end)}`;
-}
-
-function dayKey(d){
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function monthKeyFromYM(y, m){
-  return `${y}-${pad2(m + 1)}`;
-}
-
-function weekKeyFromSunday(sun){
-  return dayKey(sun);
-}
-
-function isMobile(){
-  return window.matchMedia('(max-width: 640px)').matches;
-}
-
-function isTabletDown(){
-  return window.matchMedia('(max-width: 920px)').matches;
-}
-
-function getMonthMaxBadges(){
-  return isMobile() ? 2 : 3;
-}
-
-function getWeekMaxBadges(){
-  return isMobile() ? 3 : 4;
-}
-
-function normalizeRepeat(freq, interval){
-  const f = String(freq || 'none').toLowerCase().trim();
-  const allowed = new Set(['none', 'daily', 'weekly', 'monthly', 'yearly']);
-  const safeFreq = allowed.has(f) ? f : 'none';
-
-  let n = Number(interval);
-  if(!Number.isFinite(n) || n <= 0) n = 1;
-  n = Math.min(3650, Math.max(1, Math.floor(n)));
-
-  if(safeFreq === 'none') return null;
-  return { freq: safeFreq, interval: n };
-}
-
-function parseRemindersInput(raw){
-  const s = String(raw ?? '').trim();
-  if(!s) return [];
-  const parts = s.split(',').map(x => x.trim()).filter(Boolean);
-
-  const nums = [];
-  for(const p of parts){
-    const n = Number(p);
-    if(!Number.isFinite(n)) continue;
-    const nn = Math.floor(n);
-    if(nn < 0) continue;
-    if(nn > 43200) continue;
-    nums.push(nn);
-  }
-
-  return Array.from(new Set(nums)).sort((a, b) => a - b).slice(0, 8);
-}
-
-function remindersToInput(arr){
-  if(!Array.isArray(arr) || !arr.length) return '';
-  return arr
-    .map(n => String(Math.floor(Number(n) || 0)))
-    .filter(Boolean)
-    .join(', ');
-}
-
-function escapeText(s){
-  return String(s ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-function getFocusable(container){
-  if(!container) return [];
-  return Array.from(container.querySelectorAll(
-    'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
-  ));
-}
-
-function normKey(s){
-  return String(s || '')
-    .toLowerCase()
-    .trim()
-    .replace(/[áàä]/g, 'a')
-    .replace(/[éèë]/g, 'e')
-    .replace(/[íìï]/g, 'i')
-    .replace(/[óòö]/g, 'o')
-    .replace(/[úùü]/g, 'u')
-    .replace(/ñ/g, 'n')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 30);
-}
-
-function uniqKey(base, existing){
-  let k = base || 'categoria';
-  if(!existing.has(k)) return k;
-  let i = 2;
-  while(existing.has(`${k}_${i}`) && i < 999) i++;
-  return `${k}_${i}`;
-}
-
-function readDigestEvidence(){
-  try{
-    const raw = localStorage.getItem(LS_SENT_KEY);
-    if(!raw) return null;
-    const obj = JSON.parse(raw);
-    if(!obj || typeof obj !== 'object') return null;
-
-    let last = null;
-    for(const v of Object.values(obj)){
-      const n = Number(v);
-      if(Number.isFinite(n)) last = Math.max(last || 0, n);
-      else{
-        const s = Number(v?.sentAt);
-        if(Number.isFinite(s)) last = Math.max(last || 0, s);
-      }
-    }
-    if(!last) return null;
-
-    const d = new Date(last);
-    if(Number.isNaN(d.getTime())) return null;
-    return d;
-  }catch{
-    return null;
-  }
-}
-
-function createDiv(className, text){
-  const el = document.createElement('div');
-  if(className) el.className = className;
-  if(text != null) el.textContent = text;
-  return el;
-}
-
-function createBtn({ id = '', className = 'btn', text = '', type = 'button', title = '', ariaLabel = '' } = {}){
-  const btn = document.createElement('button');
-  btn.type = type;
-  btn.className = className;
-  if(id) btn.id = id;
-  if(text) btn.textContent = text;
-  if(title) btn.title = title;
-  if(ariaLabel) btn.setAttribute('aria-label', ariaLabel);
-  return btn;
-}
-
-function createPill(text){
-  const el = createDiv('pill', text);
-  el.style.boxShadow = 'none';
-  return el;
-}
-
-function createMuted(text){
-  return createDiv('muted', text);
-}
-
-function eventStart(ev){
-  return safeDate(ev?.start);
-}
-
-function eventEnd(ev){
-  return safeDate(ev?.end);
-}
-
-function eventCategoryLabel(ev, categories){
-  const key = String(ev?.category || 'personal');
-  return categories?.[key]?.label || key;
-}
-
-function sortEventsByStart(list){
-  return list.slice().sort((a, b) => {
-    const da = eventStart(a)?.getTime() ?? 0;
-    const db = eventStart(b)?.getTime() ?? 0;
-    return da - db;
-  });
-}
-
-function normalizeView(view){
-  return ['month', 'week', 'agenda'].includes(view) ? view : 'month';
-}
 
 export const ui = (() => {
   let state = {
@@ -331,13 +105,13 @@ export const ui = (() => {
   };
 
   let handlers = {
-    onLogin: () => {},
     onGoogle: () => {},
     onDemo: () => {},
     onLogout: () => {},
     onCreateEvent: () => {},
     onDeleteEvent: () => {},
     onSaveSettings: () => {},
+    onTestDigest: () => {},
   };
 
   let lastFocusEl = null;
@@ -397,10 +171,7 @@ export const ui = (() => {
     const loginForm = $('loginForm');
     on(loginForm, 'submit', (e) => {
       e.preventDefault();
-      handlers.onLogin({
-        email: ($('email')?.value || '').trim(),
-        password: $('password')?.value || ''
-      });
+      handlers.onGoogle();
     });
 
     on($('btnDemo'), 'click', () => handlers.onDemo());
@@ -416,6 +187,7 @@ export const ui = (() => {
     });
 
     on($('btnAddCategory'), 'click', () => addCategoryUI());
+    on($('btnTestDigest'), 'click', () => handlers.onTestDigest());
 
     on($('btnPrev'), 'click', () => shiftCursor(-1));
     on($('btnNext'), 'click', () => shiftCursor(1));
@@ -621,6 +393,7 @@ export const ui = (() => {
   function onCreateEvent(fn){ handlers.onCreateEvent = fn; }
   function onDeleteEvent(fn){ handlers.onDeleteEvent = fn; }
   function onSaveSettings(fn){ handlers.onSaveSettings = fn; }
+  function onTestDigest(fn){ handlers.onTestDigest = fn; }
 
   function showAuth(){
     $('authScreen')?.classList.remove('hidden');
@@ -668,7 +441,7 @@ export const ui = (() => {
       );
       const box = $('statsBox');
       if(hintNode && box && box.children.length){
-        if(String(hintNode.textContent || '').includes('Próximamente')){
+        if(String(hintNode.textContent || '').includes('Proximamente')){
           hintNode.textContent = 'Resumen calculado con lo que hay en este mes.';
         }
       }
@@ -679,18 +452,18 @@ export const ui = (() => {
       const muted = Array.from(sm.querySelectorAll('.railBlock .muted, .railBlock .small'));
       for(const el of muted){
         const t = String(el.textContent || '');
-        if(!t.includes('Próximamente')) continue;
+        if(!t.includes('Proximamente')) continue;
 
-        if(t.includes('Festivos') || t.includes('Se generan automáticamente')){
-          el.textContent = 'Se muestran como eventos del sistema cuando están habilitados.';
+        if(t.includes('Festivos') || t.includes('Se generan automaticamente')){
+          el.textContent = 'Se muestran como eventos del sistema cuando estan habilitados.';
           continue;
         }
-        if(t.includes('correo') || t.includes('hoy/mañana')){
+        if(t.includes('correo') || t.includes('hoy/manana')){
           el.textContent = 'Se dispara localmente y queda evidencia guardada en este navegador.';
           continue;
         }
         if(t.toLowerCase().includes('categor')){
-          el.textContent = 'Puedes crear, editar y eliminar categorías desde aquí.';
+          el.textContent = 'Puedes crear, editar y eliminar categorias desde aqui.';
         }
       }
     }
@@ -699,22 +472,14 @@ export const ui = (() => {
   function setSettings(s){
     if(!s || typeof s !== 'object') return;
 
-    if(s.categories && typeof s.categories === 'object'){
-      try{ setCategories(s.categories, { fromSettings: true }); }catch{}
-      state.settings.categories = { ...s.categories };
-    }else{
-      state.settings.categories = { ...(state.categories || DEFAULT_CATEGORIES) };
-    }
+    const nextCategories = getEffectiveCategories(
+      s.categories,
+      state.categories,
+      DEFAULT_CATEGORIES
+    );
 
-    const next = {
-      holidaysCO: (s.holidaysCO === 'off' ? 'off' : 'on'),
-      emailDigest: (s.emailDigest === 'off' ? 'off' : 'on'),
-      emailDigestTime: (typeof s.emailDigestTime === 'string' && /^\d{2}:\d{2}$/.test(s.emailDigestTime))
-        ? s.emailDigestTime
-        : (state.settings.emailDigestTime || '07:00'),
-    };
-
-    state.settings = { ...state.settings, ...next };
+    try{ setCategories(nextCategories, { fromSettings: true }); }catch{}
+    state.settings = buildSettingsStateUpdate(state.settings, s, nextCategories);
 
     if(!$('settingsModal')?.classList.contains('hidden')){
       syncSettingsToUI();
@@ -761,23 +526,23 @@ export const ui = (() => {
   function syncSettingsToUI(){
     if($('setHolidaysCO')) $('setHolidaysCO').value = state.settings.holidaysCO || 'on';
     if($('setEmailDigest')) $('setEmailDigest').value = state.settings.emailDigest || 'on';
-    if($('setEmailDigestTime')) $('setEmailDigestTime').value = state.settings.emailDigestTime || '07:00';
+    if($('setEmailDigestTime')) $('setEmailDigestTime').value = normalizeEmailDigestTime(state.settings.emailDigestTime, '07:00');
   }
 
   function readSettingsFromUI(){
     const holidaysCO = $('setHolidaysCO')?.value || 'on';
     const emailDigest = $('setEmailDigest')?.value || 'on';
     const emailDigestTime = $('setEmailDigestTime')?.value || '07:00';
-    const timeOk = /^\d{2}:\d{2}$/.test(emailDigestTime);
+    const cats = readCategoriesFromEditor() || getEffectiveCategories(
+      state.settings.categories,
+      state.categories,
+      DEFAULT_CATEGORIES
+    );
 
-    const cats = readCategoriesFromEditor() || (state.settings.categories || state.categories || DEFAULT_CATEGORIES);
-
-    return {
-      holidaysCO: (holidaysCO === 'off' ? 'off' : 'on'),
-      emailDigest: (emailDigest === 'off' ? 'off' : 'on'),
-      emailDigestTime: timeOk ? emailDigestTime : '07:00',
-      categories: cats,
-    };
+    return buildSettingsPayload(
+      { holidaysCO, emailDigest, emailDigestTime },
+      cats
+    );
   }
 
   function saveSettingsFromUI(){
@@ -815,12 +580,7 @@ export const ui = (() => {
   }
 
   function ensureFiltersForCategories(){
-    const cats = state.categories || {};
-    const next = { ...(state.filters || {}) };
-    for(const k of Object.keys(cats)){
-      if(typeof next[k] !== 'boolean') next[k] = true;
-    }
-    state.filters = next;
+    state.filters = ensureCategoryFilters(state.filters, state.categories || {});
   }
 
   function renderChips(){
@@ -876,17 +636,13 @@ export const ui = (() => {
     const keys = Object.keys(cats);
 
     if(keys.length === 0){
-      const p = createMuted('No hay categorías. Crea una.');
+      const p = createMuted('No hay categorias. Crea una.');
       p.style.fontSize = '12px';
       box.appendChild(p);
       return;
     }
 
-    const ordered = keys.slice().sort((a, b) => {
-      if(a === 'personal') return -1;
-      if(b === 'personal') return 1;
-      return a.localeCompare(b);
-    });
+    const ordered = sortCategoryKeys(cats);
 
     for(const key of ordered){
       const row = document.createElement('div');
@@ -908,7 +664,7 @@ export const ui = (() => {
         className: 'btn',
         text: 'Eliminar',
         type: 'button',
-        title: key === 'personal' ? 'No puedes eliminar la categoría base.' : 'Eliminar categoría'
+        title: key === 'personal' ? 'No puedes eliminar la categoria base.' : 'Eliminar categoria'
       });
       del.disabled = (key === 'personal');
       del.addEventListener('click', () => {
@@ -924,7 +680,7 @@ export const ui = (() => {
       input.value = String(cats[key]?.label || key);
       input.dataset.catKey = key;
       input.placeholder = 'Nombre visible';
-      input.setAttribute('aria-label', `Nombre de categoría ${key}`);
+      input.setAttribute('aria-label', `Nombre de categoria ${key}`);
       input.addEventListener('input', () => {
         state._dirtySettingsCats = true;
       });
@@ -952,12 +708,11 @@ export const ui = (() => {
       cats[k] = { label: label.slice(0, 60) };
     }
 
-    if(!cats.personal) cats.personal = { label: 'Personal' };
-    return cats;
+    return ensurePersonalCategory(cats);
   }
 
   function addCategoryUI(){
-    const name = window.prompt('Nombre de la nueva categoría:');
+    const name = window.prompt('Nombre de la nueva categoria:');
     const label = String(name || '').trim();
     if(!label) return;
 
@@ -965,7 +720,7 @@ export const ui = (() => {
     const base = normKey(label) || 'categoria';
     const key = uniqKey(base, existing);
 
-    const cats = { ...(state.settings.categories || state.categories || DEFAULT_CATEGORIES) };
+    const cats = getEffectiveCategories(state.settings.categories, state.categories, DEFAULT_CATEGORIES);
     cats[key] = { label: label.slice(0, 60) };
 
     state.settings.categories = cats;
@@ -986,7 +741,7 @@ export const ui = (() => {
 
     const hasEvents = (state.events || []).some(ev => String(ev?.category || '') === key);
     if(hasEvents){
-      const ok = window.confirm(`Hay eventos usando "${key}". Si la borras, esos eventos quedarán como "personal". ¿Borrarla igual?`);
+      const ok = window.confirm(`Hay eventos usando "${key}". Si la borras, esos eventos quedaran como "personal". ¿Borrarla igual?`);
       if(!ok) return;
 
       for(const ev of state.events){
@@ -997,10 +752,10 @@ export const ui = (() => {
     }
 
     delete cats[key];
-    if(!cats.personal) cats.personal = { label: 'Personal' };
+    const nextCats = ensurePersonalCategory(cats);
 
-    state.settings.categories = cats;
-    state.categories = { ...cats };
+    state.settings.categories = nextCats;
+    state.categories = { ...nextCats };
     state._dirtySettingsCats = true;
 
     ensureFiltersForCategories();
@@ -1032,21 +787,30 @@ export const ui = (() => {
 
     const enabled = (state.settings.emailDigest !== 'off');
     const time = state.settings.emailDigestTime || '07:00';
-    const ev = readDigestEvidence();
+    const ev = readDigestEvidence(LS_SENT_KEY);
 
-    const row1 = createPill(enabled ? `Digest activado · ${time}` : 'Digest desactivado');
+    const row1 = createPill(enabled ? `Digest activado - ${time}` : 'Digest desactivado');
     row1.style.fontSize = '12px';
 
     const row2 = createMuted(
       ev
-        ? `Última ejecución registrada: ${formatLongDate(ev)} · ${formatTime(ev)}`
-        : 'Aún no hay ejecución registrada en este navegador.'
+        ? `Ultima ejecucion registrada: ${formatLongDate(ev)} - ${formatTime(ev)}`
+        : 'Aun no hay ejecucion registrada en este navegador.'
     );
     row2.style.fontSize = '12px';
     row2.style.lineHeight = '1.35';
 
+    const row3 = createMuted(
+      state.userEmail
+        ? `Destino visible: ${state.userEmail}. Envio automatico real: no configurado todavia.`
+        : 'No hay un correo visible para pruebas y tampoco hay envio automatico real configurado.'
+    );
+    row3.style.fontSize = '12px';
+    row3.style.lineHeight = '1.35';
+
     host.appendChild(row1);
     host.appendChild(row2);
+    host.appendChild(row3);
   }
 
   function setEvents(events){
@@ -1296,7 +1060,7 @@ export const ui = (() => {
     }
 
     if(titleMain) titleMain.textContent = 'Agenda';
-    if(titleSub) titleSub.textContent = `${MONTHS[m]} ${y} y próximos eventos`;
+    if(titleSub) titleSub.textContent = `${MONTHS[m]} ${y} y proximos eventos`;
   }
 
   function renderMonthStats(y, m){
@@ -1359,9 +1123,9 @@ export const ui = (() => {
 
     const pills = [
       `Eventos: ${list.length}`,
-      `Críticos: ${crit} · Importantes: ${imp}`,
-      `Días ocupados: ${busyDays} · Días libres: ${freeDays}`,
-      `Racha más larga: ${longest} día(s)`,
+      `Criticos: ${crit} - Importantes: ${imp}`,
+      `Dias ocupados: ${busyDays} - Dias libres: ${freeDays}`,
+      `Racha mas larga: ${longest} dia(s)`,
     ];
 
     for(const text of pills){
@@ -1376,7 +1140,7 @@ export const ui = (() => {
 
       for(const [cat, n] of topCats){
         const label = state.categories?.[cat]?.label || cat;
-        const chip = createDiv('chip', `${label} · ${n}`);
+        const chip = createDiv('chip', `${label} - ${n}`);
         catsWrap.appendChild(chip);
       }
 
@@ -1384,7 +1148,7 @@ export const ui = (() => {
     }
 
     if(list.length === 0){
-      const muted = createMuted('Este mes está sospechosamente vacío.');
+      const muted = createMuted('Este mes esta sospechosamente vacio.');
       muted.style.fontSize = '12px';
       box.appendChild(muted);
     }
@@ -1545,7 +1309,7 @@ export const ui = (() => {
     }
 
     if(events.length > maxBadges){
-      const more = createDiv('badge', `+${events.length - maxBadges} más`);
+      const more = createDiv('badge', `+${events.length - maxBadges} mas`);
       badges.appendChild(more);
     }
 
@@ -1556,20 +1320,23 @@ export const ui = (() => {
   function buildEventBadge(ev, compact = false){
     const b = document.createElement('div');
     b.className = 'badge';
+    if(compact) b.classList.add('compact');
+    else b.classList.add('full');
     if(ev?.priority === 'importante') b.classList.add('important');
     if(ev?.priority === 'critico') b.classList.add('critico');
-    if(ev?.isSystem) b.style.opacity = '0.95';
+    if(ev?.isSystem) b.classList.add('system');
 
     if(ev?.id != null) b.dataset.evId = String(ev.id);
+    if(ev?.category) b.dataset.category = String(ev.category);
 
     const s = eventStart(ev);
-    const title = ev?.title || '(Sin título)';
+    const title = ev?.title || '(Sin titulo)';
     b.title = title;
 
     if(compact && state.view !== 'agenda'){
-      b.textContent = isMobile() ? title : (s ? `${formatTime(s)} · ${title}` : title);
+      b.textContent = isMobile() ? title : (s ? `${formatTime(s)} - ${title}` : title);
     }else{
-      b.textContent = s ? `${formatTime(s)} · ${title}` : title;
+      b.textContent = s ? `${formatTime(s)} - ${title}` : title;
     }
 
     return b;
@@ -1577,16 +1344,17 @@ export const ui = (() => {
 
   function buildAgendaEventRow(ev){
     const row = buildEventBadge(ev, false);
+    row.classList.add('agendaRow');
     row.dataset.evId = String(ev?.id || '');
 
     const s = eventStart(ev);
     const e = eventEnd(ev);
-    const title = ev?.title || '(Sin título)';
+    const title = ev?.title || '(Sin titulo)';
     const cat = eventCategoryLabel(ev, state.categories);
 
     let detail = s ? `${formatTime(s)}` : '--:--';
     if(e) detail += ` - ${formatTime(e)}`;
-    detail += ` · ${title} · ${cat}`;
+    detail += ` - ${title} - ${cat}`;
 
     row.textContent = detail;
     return row;
@@ -1624,30 +1392,35 @@ export const ui = (() => {
     const body = $('panelBody');
     if(!body) return;
     body.innerHTML = '';
+    if($('panel')?.querySelector('.panelTitle')) $('panel').querySelector('.panelTitle').textContent = 'Dia';
 
     body.appendChild(createPill(formatLongDate(d)));
 
     const summary = createMuted(
       list.length
-        ? `${list.length} evento(s) en este día`
-        : 'Nada por aquí. Bastante decente, la verdad.'
+        ? `${list.length} evento(s) en este dia`
+        : 'Nada por aqui. Bastante decente, la verdad.'
     );
+    summary.classList.add('panelSummary');
     body.appendChild(summary);
 
     if(!list.length){
       const btn = createBtn({
         className: 'btn primary',
-        text: 'Crear evento este día'
+        text: 'Crear evento este dia'
       });
       btn.dataset.action = 'new-on-day';
       btn.dataset.dayIso = k;
       body.appendChild(btn);
     }else{
+      const listWrap = document.createElement('div');
+      listWrap.className = 'panelList';
       for(const ev of list){
         const item = buildAgendaEventRow(ev);
         item.style.cursor = 'pointer';
-        body.appendChild(item);
+        listWrap.appendChild(item);
       }
+      body.appendChild(listWrap);
 
       const btn = createBtn({
         className: 'btn primary',
@@ -1667,22 +1440,25 @@ export const ui = (() => {
     const body = $('panelBody');
     if(!body) return;
     body.innerHTML = '';
+    if($('panel')?.querySelector('.panelTitle')) $('panel').querySelector('.panelTitle').textContent = 'Evento';
 
     const s = eventStart(ev);
     const e = eventEnd(ev);
 
-    body.appendChild(createPill(ev?.title || '(Sin título)'));
+    body.appendChild(createPill(ev?.title || '(Sin titulo)'));
 
     const when = createMuted(
       s
-        ? `${formatLongDate(s)} · ${formatTime(s)}${e ? ` - ${formatTime(e)}` : ''}`
-        : 'Fecha inválida. Ese dato salió respondón.'
+        ? `${formatLongDate(s)} - ${formatTime(s)}${e ? ` - ${formatTime(e)}` : ''}`
+        : 'Fecha invalida. Ese dato salio respondon.'
     );
+    when.classList.add('panelSummary');
     body.appendChild(when);
 
     const meta = createMuted(
-      `Categoría: ${eventCategoryLabel(ev, state.categories)} · Prioridad: ${ev?.priority || 'normal'}${ev?.isSystem ? ' · Sistema' : ''}`
+      `Categoria: ${eventCategoryLabel(ev, state.categories)} - Prioridad: ${ev?.priority || 'normal'}${ev?.isSystem ? ' - Sistema' : ''}`
     );
+    meta.classList.add('panelMeta');
     body.appendChild(meta);
 
     if(ev?.repeat?.freq){
@@ -1698,14 +1474,14 @@ export const ui = (() => {
     }
 
     if(ev?.notes){
-      const notes = createDiv('badge', ev.notes);
+      const notes = createDiv('badge noteCard', ev.notes);
       notes.style.whiteSpace = 'normal';
       notes.style.alignItems = 'flex-start';
       body.appendChild(notes);
     }
 
     const actions = document.createElement('div');
-    actions.className = 'row wrap';
+    actions.className = 'row wrap panelActions';
     actions.style.marginTop = '8px';
 
     const edit = createBtn({
@@ -1796,7 +1572,7 @@ export const ui = (() => {
     const end = $('evEnd')?.value || '';
 
     if(!title){
-      showMsg('Pónganle un título al evento. Un misterio no agenda nada.');
+      showMsg('Ponganle un titulo al evento. Un misterio no agenda nada.');
       $('evTitle')?.focus?.();
       return null;
     }
@@ -1808,14 +1584,14 @@ export const ui = (() => {
 
     const startDate = new Date(start);
     if(Number.isNaN(startDate.getTime())){
-      showMsg('Inicio inválido. Revisen la fecha y hora.');
+      showMsg('Inicio invalido. Revisen la fecha y hora.');
       $('evStart')?.focus?.();
       return null;
     }
 
     const endDate = end ? new Date(end) : null;
     if(endDate && Number.isNaN(endDate.getTime())){
-      showMsg('Fin inválido. Revisen la fecha y hora.');
+      showMsg('Fin invalido. Revisen la fecha y hora.');
       $('evEnd')?.focus?.();
       return null;
     }
@@ -1885,5 +1661,6 @@ export const ui = (() => {
     onCreateEvent,
     onDeleteEvent,
     onSaveSettings,
+    onTestDigest,
   };
 })();
