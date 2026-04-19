@@ -19,6 +19,18 @@ import { reminders } from './reminders.js';
 (async function main(){
   'use strict';
 
+  const SHARED_NOTIFICATION_EMAILS = Object.freeze([
+    'alekcaballeromusic@gmail.com',
+    'catalina.medina.leal@gmail.com',
+  ]);
+
+  // Pega aqui la URL del Web App de Apps Script (Deploy > Web app).
+  // Debe apuntar al endpoint que recibe JSON y usa MailApp.sendEmail.
+  const APPS_SCRIPT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbz66zqHVCctinuIJRvzz8Md1jpgKWW0g561OhYww1yBaxszl3XFMjN7sER40395_32p/exec';
+
+  // Si defines un token en Apps Script, colocalo aqui para validacion basica.
+  const APPS_SCRIPT_TOKEN = '';
+
   // =========================================================
   // Helpers
   // =========================================================
@@ -114,6 +126,7 @@ import { reminders } from './reminders.js';
     holidaysCO: 'on',
     emailDigest: 'on',
     emailDigestTime: '07:00',
+    emailDigestTo: SHARED_NOTIFICATION_EMAILS.slice(),
     categories: getDefaultCategories({ includeHoliday: true }),
   };
 
@@ -391,6 +404,7 @@ import { reminders } from './reminders.js';
         holidaysCO: 'on',
         emailDigest: 'on',
         emailDigestTime: '07:00',
+        emailDigestTo: SHARED_NOTIFICATION_EMAILS.slice(),
         categories: {},
       };
       return ensureHolidayCategoryInSettings(s);
@@ -399,6 +413,7 @@ import { reminders } from './reminders.js';
         holidaysCO: 'on',
         emailDigest: 'on',
         emailDigestTime: '07:00',
+        emailDigestTo: SHARED_NOTIFICATION_EMAILS.slice(),
         categories: {},
       });
     }
@@ -474,9 +489,94 @@ import { reminders } from './reminders.js';
   // =========================================================
   // Reminders
   // =========================================================
+  const resolveRecipients = () => {
+    const fromStore = settingsStore.get?.()?.emailDigestTo;
+    if(Array.isArray(fromStore) && fromStore.length){
+      return Array.from(new Set(fromStore.map(x => String(x || '').trim().toLowerCase()).filter(Boolean)));
+    }
+    return SHARED_NOTIFICATION_EMAILS.slice();
+  };
+
+  const sendEmailViaAppsScript = async ({ to = [], subject = '', body = '', meta = {} } = {}) => {
+    const endpoint = String(APPS_SCRIPT_WEBHOOK_URL || '').trim();
+    if(!endpoint){
+      return { ok: false, reason: 'missing-apps-script-endpoint' };
+    }
+
+    const recipients = Array.from(new Set(
+      (Array.isArray(to) ? to : resolveRecipients())
+        .map(x => String(x || '').trim().toLowerCase())
+        .filter(Boolean)
+    ));
+
+    const payload = {
+      to: recipients.length ? recipients : resolveRecipients(),
+      subject: String(subject || 'Notificacion Calendario Morchis').trim(),
+      body: String(body || '').trim(),
+      meta: {
+        ...meta,
+        source: 'calendario-morchis-web',
+      },
+      token: String(APPS_SCRIPT_TOKEN || '').trim() || undefined,
+    };
+
+    try{
+      // Apps Script Web App no suele responder con CORS habilitado para fetch
+      // desde localhost. Usamos no-cors para permitir que el POST salga igual.
+      // Ojo: el navegador no deja leer el body/status de la respuesta.
+      await fetch(endpoint, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+      });
+
+      return { ok: true, sent: true, mode: 'no-cors' };
+    }catch(err){
+      console.warn('[email] No se pudo enviar con Apps Script:', err);
+      return { ok: false, reason: String(err?.message || err || 'email-send-failed') };
+    }
+  };
+
+  const notifyCreatedEventByEmail = async (ev) => {
+    const start = safeDate(ev?.startMs ?? ev?.start);
+    const when = start
+      ? `${ymd(start)} ${pad2(start.getHours())}:${pad2(start.getMinutes())}`
+      : 'fecha no valida';
+
+    const title = String(ev?.title || '(Sin titulo)').trim();
+    const category = String(ev?.category || 'personal').trim();
+    const priority = String(ev?.priority || 'normal').trim();
+    const notes = String(ev?.notes || '').trim();
+
+    const bodyLines = [
+      `Se creo un evento nuevo en Calendario Morchis.`,
+      ``,
+      `Titulo: ${title}`,
+      `Fecha/Hora: ${when}`,
+      `Categoria: ${category}`,
+      `Prioridad: ${priority}`,
+      notes ? `Notas: ${notes}` : '',
+      ``,
+      `Creado por: ${session.email || 'usuario sin email visible'}`,
+    ].filter(Boolean);
+
+    return sendEmailViaAppsScript({
+      to: resolveRecipients(),
+      subject: `[Calendario Morchis] Nuevo evento: ${title}`,
+      body: bodyLines.join('\n'),
+      meta: {
+        type: 'event_created',
+        eventId: ev?.id || null,
+        createdBy: session.email || null,
+      },
+    });
+  };
+
   reminders.init({
     getEvents: () => currentExpandedEvents,
     getSettings: () => settingsStore.get?.() || {},
+    sendEmail: sendEmailViaAppsScript,
     notify: ({ title, body }) => {
       try{
         ui.showMsg(`${title}${body ? `\n${body}` : ''}`);
@@ -608,6 +708,7 @@ import { reminders } from './reminders.js';
       holidaysCO: 'on',
       emailDigest: 'on',
       emailDigestTime: '07:00',
+      emailDigestTo: SHARED_NOTIFICATION_EMAILS.slice(),
       categories: getDefaultCategories(),
     });
 
@@ -645,6 +746,11 @@ import { reminders } from './reminders.js';
     upsertLocalRaw(saved);
     await recomputeExpanded({ render: false });
     ui.render();
+
+    const emailResult = await notifyCreatedEventByEmail(saved);
+    if(!emailResult?.ok){
+      ui.showMsg('Evento guardado. Ojo: no se envio correo automatico (falta configurar Apps Script).');
+    }
   });
 
   ui.onDeleteEvent(async (id) => {
@@ -683,7 +789,7 @@ import { reminders } from './reminders.js';
   });
 
   ui.onTestDigest(async () => {
-    const recipients = session.email ? [session.email] : [];
+    const recipients = resolveRecipients();
 
     const result = await safe(
       () => reminders.sendDailyDigestNow({

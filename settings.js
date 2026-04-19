@@ -83,6 +83,10 @@ export const settingsDefaults = Object.freeze({
   holidaysCO: 'on',
   emailDigest: 'on',
   emailDigestTime: '07:00',
+  emailDigestTo: [
+    'alekcaballeromusic@gmail.com',
+    'catalina.medina.leal@gmail.com',
+  ],
   categories: {
     personal: { label: 'Personal' },
     trabajo: { label: 'Trabajo' },
@@ -133,6 +137,17 @@ function normStr(v, max = 120){
   const s = String(v ?? '').trim();
   if(!s) return '';
   return s.length > max ? s.slice(0, max) : s;
+}
+
+function normEmailList(list){
+  if(!Array.isArray(list)) return [];
+  const out = [];
+  for(const item of list){
+    const val = String(item || '').trim().toLowerCase();
+    if(!val || !val.includes('@')) continue;
+    out.push(val);
+  }
+  return Array.from(new Set(out)).slice(0, 10);
 }
 
 function normCategories(obj){
@@ -215,6 +230,7 @@ export function normalizeSettings(raw = {}){
   const holidaysCOFlag = normOnOff(s.holidaysCO, settingsDefaults.holidaysCO);
   const emailDigest = normOnOff(s.emailDigest, settingsDefaults.emailDigest);
   const emailDigestTime = parseHHMM(s.emailDigestTime, settingsDefaults.emailDigestTime);
+  const emailDigestTo = normEmailList(s.emailDigestTo);
 
   const cats = normCategories(s.categories);
   const categories = cats || { ...settingsDefaults.categories };
@@ -231,6 +247,7 @@ export function normalizeSettings(raw = {}){
     holidaysCO: holidaysCOFlag,
     emailDigest,
     emailDigestTime,
+    emailDigestTo: emailDigestTo.length ? emailDigestTo : settingsDefaults.emailDigestTo.slice(),
     categories,
     reminders,
   };
