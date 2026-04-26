@@ -1334,8 +1334,7 @@ textarea{
     order: initial;
   }
 
-  .calendar > .grid,
-  .calendar > .weekdays{
+  .calendar{
     min-width: 640px;
   }
 
@@ -1486,11 +1485,12 @@ textarea{
      pero más compacto para que no parezca una sábana */
   .calendar{
     border-radius: 16px;
+    min-width: 560px;
   }
 
   .calendar > .grid,
   .calendar > .weekdays{
-    min-width: 560px;
+    min-width: 100%;
   }
 
   .weekday{
@@ -1634,8 +1634,7 @@ textarea{
     padding: 10px;
   }
 
-  .calendar > .grid,
-  .calendar > .weekdays{
+  .calendar{
     min-width: 520px;
   }
 
