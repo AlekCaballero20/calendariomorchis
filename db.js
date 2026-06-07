@@ -1,4 +1,8 @@
-// db.js - Firestore implementation (events + per-user settings)
+// db.js - Firestore implementation (shared calendar + shared settings)
+// v5 Morchis shared
+// - Alek y Cata ven el mismo calendario usando calendarId.
+// - Mantiene ownerUid/ownerEmail como auditoria, pero YA NO filtra por ownerUid.
+// - Incluye fallback/migracion suave para eventos viejos que quedaron guardados por usuario.
 
 'use strict';
 
@@ -12,18 +16,29 @@ import {
   doc,
   getDoc,
   getDocs,
-  limit,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   where,
+  writeBatch,
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
 const COL_EVENTS = 'events';
 const COL_USERS = 'users';
+const COL_CALENDARS = 'calendars';
 const SUB_SETTINGS = 'settings';
 const SETTINGS_DOC_ID = 'main';
+
+// Calendario unico compartido para ustedes dos.
+// Si algun dia crean otro calendario familiar/proyecto, cambia/duplica este id.
+const SHARED_CALENDAR_ID = 'morchis-main';
+const SHARED_CALENDAR_NAME = 'Calendario Morchis';
+
+const SHARED_EMAILS = Object.freeze([
+  'alekcaballeromusic@gmail.com',
+  'catalina.medina.leal@gmail.com',
+]);
 
 const DEFAULT_EVENTS = {
   category: 'personal',
@@ -39,6 +54,10 @@ const ALLOWED_REPEAT_FREQ = new Set(['daily', 'weekly', 'monthly', 'yearly']);
 
 function normEmail(value){
   return String(value || '').trim().toLowerCase();
+}
+
+function isSharedUser(email){
+  return SHARED_EMAILS.includes(normEmail(email));
 }
 
 function normStr(value, max = 4000){
@@ -143,8 +162,13 @@ function normalizeEventInput(data = {}){
     reminders: normalizeReminders(data.reminders),
     createdAt,
     updatedAt,
+    calendarId: SHARED_CALENDAR_ID,
+    calendarName: SHARED_CALENDAR_NAME,
+    sharedWith: SHARED_EMAILS.slice(),
     ownerUid: normStr(data.ownerUid, 128) || (ctx.uid || ''),
-    ownerEmail: normStr(data.ownerEmail, 180) || (ctx.email || ''),
+    ownerEmail: normEmail(data.ownerEmail) || (ctx.email || ''),
+    updatedByUid: ctx.uid || null,
+    updatedByEmail: ctx.email || null,
   };
 }
 
@@ -159,8 +183,13 @@ function normalizeEventFromDb(id, raw){
     notes: normStr(raw?.notes, 4000),
     createdAt: isFiniteNum(Number(raw?.createdAt)) ? Number(raw.createdAt) : nowMs(),
     updatedAt: isFiniteNum(Number(raw?.updatedAt)) ? Number(raw.updatedAt) : nowMs(),
+    calendarId: normStr(raw?.calendarId, 80),
+    calendarName: normStr(raw?.calendarName, 120),
+    sharedWith: Array.isArray(raw?.sharedWith) ? raw.sharedWith.map(normEmail).filter(Boolean) : [],
     ownerUid: normStr(raw?.ownerUid, 128),
-    ownerEmail: normStr(raw?.ownerEmail, 180),
+    ownerEmail: normEmail(raw?.ownerEmail),
+    updatedByUid: normStr(raw?.updatedByUid, 128) || null,
+    updatedByEmail: normEmail(raw?.updatedByEmail) || null,
   };
 
   const startMs = normMs(raw?.startMs ?? raw?.start);
@@ -176,6 +205,26 @@ function normalizeEventFromDb(id, raw){
   return out;
 }
 
+function sortEvents(list){
+  return (list || []).slice().sort((a, b) => {
+    const aMs = isFiniteNum(a.startMs) ? a.startMs : Number.POSITIVE_INFINITY;
+    const bMs = isFiniteNum(b.startMs) ? b.startMs : Number.POSITIVE_INFINITY;
+    if(aMs !== bMs) return aMs - bMs;
+    return String(a.start || '9999').localeCompare(String(b.start || '9999'));
+  });
+}
+
+function mergeEvents(...groups){
+  const map = new Map();
+  for(const group of groups){
+    for(const ev of group || []){
+      if(!ev?.id) continue;
+      map.set(ev.id, ev);
+    }
+  }
+  return sortEvents(Array.from(map.values()));
+}
+
 function errMsg(err, fallback = 'Firestore no explico el error.'){
   const msg = String(err?.message || '').trim();
   return msg || fallback;
@@ -187,10 +236,10 @@ function explainFirestoreErr(err){
   const lower = msg.toLowerCase();
 
   if(msg.includes('Missing or insufficient permissions') || code === 'permission-denied'){
-    return 'Permisos insuficientes en Firestore. Revisa Rules y la allowlist.';
+    return 'Permisos insuficientes en Firestore. Revisa firestore.rules: los dos correos deben poder leer/escribir calendarId=morchis-main.';
   }
   if((lower.includes('failed-precondition') && lower.includes('index')) || code === 'failed-precondition'){
-    return 'Falta un indice en Firestore para esa consulta.';
+    return 'Falta un indice en Firestore para esa consulta. Puedes crearlo desde el enlace que muestra Firebase o usar el fallback sin ordenamiento.';
   }
   if(code === 'unavailable' || lower.includes('network')){
     return 'Firestore no esta disponible ahora. Revisa la conexion e intenta otra vez.';
@@ -204,7 +253,7 @@ function shouldTryFallback(err){
   return code === 'failed-precondition' || msg.includes('index') || msg.includes('failed-precondition');
 }
 
-async function runQueryWithOptionalFallback(primaryQuery, fallbackQuery){
+async function runEventQuery(primaryQuery, fallbackQuery){
   try{
     const snap = await getDocs(primaryQuery);
     return snap.docs.map(d => normalizeEventFromDb(d.id, d.data()));
@@ -213,24 +262,71 @@ async function runQueryWithOptionalFallback(primaryQuery, fallbackQuery){
       throw new Error(explainFirestoreErr(err) || errMsg(err));
     }
 
-    try{
-      const snap = await getDocs(fallbackQuery);
-      const list = snap.docs.map(d => normalizeEventFromDb(d.id, d.data()));
-      list.sort((a, b) => {
-        const aMs = isFiniteNum(a.startMs) ? a.startMs : Number.POSITIVE_INFINITY;
-        const bMs = isFiniteNum(b.startMs) ? b.startMs : Number.POSITIVE_INFINITY;
-        if(aMs !== bMs) return aMs - bMs;
-        return String(a.start || '9999').localeCompare(String(b.start || '9999'));
-      });
-      return list;
-    }catch(fallbackErr){
-      throw new Error(explainFirestoreErr(fallbackErr) || errMsg(fallbackErr));
-    }
+    const snap = await getDocs(fallbackQuery);
+    return sortEvents(snap.docs.map(d => normalizeEventFromDb(d.id, d.data())));
   }
 }
 
-function settingsDocRef(uid){
+function sharedSettingsDocRef(){
+  return doc(db, COL_CALENDARS, SHARED_CALENDAR_ID, SUB_SETTINGS, SETTINGS_DOC_ID);
+}
+
+function legacySettingsDocRef(uid){
   return doc(db, COL_USERS, uid, SUB_SETTINGS, SETTINGS_DOC_ID);
+}
+
+function allowedOrThrow(){
+  if(!ctx.uid) throw new Error('No hay usuario en contexto. Inicia sesion antes de continuar.');
+  if(!isSharedUser(ctx.email)) throw new Error('Este calendario es privado de Alek y Cata. Ese correo no esta autorizado.');
+}
+
+async function ensureSharedCalendarDoc(){
+  if(!ctx.uid) return;
+
+  try{
+    await setDoc(doc(db, COL_CALENDARS, SHARED_CALENDAR_ID), {
+      name: SHARED_CALENDAR_NAME,
+      calendarId: SHARED_CALENDAR_ID,
+      sharedWith: SHARED_EMAILS.slice(),
+      updatedAt: nowMs(),
+      updatedAtServer: serverTimestamp(),
+    }, { merge: true });
+  }catch(err){
+    // No tumbamos la app por metadata. Si falla, las reglas probablemente faltan.
+    console.warn('[dbApi.ensureSharedCalendarDoc]', explainFirestoreErr(err) || errMsg(err));
+  }
+}
+
+async function migrateLegacyEventsForCurrentUser(list){
+  const legacy = (list || []).filter(ev => ev?.id && ev.calendarId !== SHARED_CALENDAR_ID);
+  if(!legacy.length) return;
+
+  try{
+    let batch = writeBatch(db);
+    let count = 0;
+
+    for(const ev of legacy){
+      batch.set(doc(db, COL_EVENTS, ev.id), {
+        calendarId: SHARED_CALENDAR_ID,
+        calendarName: SHARED_CALENDAR_NAME,
+        sharedWith: SHARED_EMAILS.slice(),
+        migratedFromOwnerUid: ev.ownerUid || null,
+        migratedAt: nowMs(),
+        migratedAtServer: serverTimestamp(),
+      }, { merge: true });
+
+      count++;
+      if(count % 450 === 0){
+        await batch.commit();
+        batch = writeBatch(db);
+      }
+    }
+
+    if(count % 450 !== 0) await batch.commit();
+  }catch(err){
+    // Carga primero; migracion despues. No hay que romper el calendario por una mudanza incompleta.
+    console.warn('[dbApi.migrateLegacyEventsForCurrentUser]', explainFirestoreErr(err) || errMsg(err));
+  }
 }
 
 export const dbApi = {
@@ -242,22 +338,68 @@ export const dbApi = {
   async listEvents(opts = {}){
     const uid = normStr(opts.uid, 128) || ctx.uid || '';
     if(!uid) return [];
+    allowedOrThrow();
+    await ensureSharedCalendarDoc();
 
     const base = collection(db, COL_EVENTS);
-    const orderedQuery = query(
+
+    const sharedOrderedQuery = query(
+      base,
+      where('calendarId', '==', SHARED_CALENDAR_ID),
+      orderBy('startMs', 'asc')
+    );
+    const sharedFallbackQuery = query(
+      base,
+      where('calendarId', '==', SHARED_CALENDAR_ID)
+    );
+
+    const legacyOrderedQuery = query(
       base,
       where('ownerUid', '==', uid),
       orderBy('startMs', 'asc')
     );
-    const fallbackQuery = query(
+    const legacyFallbackQuery = query(
       base,
       where('ownerUid', '==', uid)
     );
+    const allEventsQuery = query(base);
 
-    return runQueryWithOptionalFallback(orderedQuery, fallbackQuery);
+    const sharedEvents = await runEventQuery(sharedOrderedQuery, sharedFallbackQuery);
+
+    // Rescate de datos viejos:
+    // 1) con las reglas nuevas, cualquiera de los dos puede leer la coleccion y migrar
+    //    eventos antiguos aunque los haya creado el otro correo.
+    // 2) si todavia tienen reglas viejas ownerUid==request.auth.uid, al menos rescata
+    //    los eventos del usuario actual.
+    let legacyEvents = [];
+    try{
+      const snap = await getDocs(allEventsQuery);
+      legacyEvents = snap.docs
+        .map(d => normalizeEventFromDb(d.id, d.data()))
+        .filter(ev => ev.calendarId !== SHARED_CALENDAR_ID);
+      await migrateLegacyEventsForCurrentUser(legacyEvents);
+    }catch(allErr){
+      console.warn('[dbApi.listEvents all legacy]', explainFirestoreErr(allErr) || errMsg(allErr));
+      try{
+        legacyEvents = await runEventQuery(legacyOrderedQuery, legacyFallbackQuery);
+        await migrateLegacyEventsForCurrentUser(legacyEvents);
+      }catch(ownerErr){
+        console.warn('[dbApi.listEvents owner legacy]', explainFirestoreErr(ownerErr) || errMsg(ownerErr));
+      }
+    }
+
+    return mergeEvents(sharedEvents, legacyEvents.map(ev => ({
+      ...ev,
+      calendarId: ev.calendarId || SHARED_CALENDAR_ID,
+      calendarName: ev.calendarName || SHARED_CALENDAR_NAME,
+      sharedWith: ev.sharedWith?.length ? ev.sharedWith : SHARED_EMAILS.slice(),
+    })));
   },
 
   async upsertEvent(data){
+    allowedOrThrow();
+    await ensureSharedCalendarDoc();
+
     const item = normalizeEventInput(data);
 
     if(!item.title) throw new Error('Titulo vacio: necesito un nombre para el evento.');
@@ -282,8 +424,13 @@ export const dbApi = {
       reminders: item.reminders.length ? item.reminders : [],
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
+      calendarId: item.calendarId,
+      calendarName: item.calendarName,
+      sharedWith: item.sharedWith,
       ownerUid: item.ownerUid,
       ownerEmail: item.ownerEmail || null,
+      updatedByUid: item.updatedByUid,
+      updatedByEmail: item.updatedByEmail,
       updatedAtServer: serverTimestamp(),
     };
 
@@ -302,6 +449,8 @@ export const dbApi = {
   },
 
   async deleteEvent(id){
+    allowedOrThrow();
+
     const safeId = normStr(id, 200);
     if(!safeId) return true;
 
@@ -316,11 +465,27 @@ export const dbApi = {
   async getSettings(opts = {}){
     const uid = normStr(opts.uid, 128) || ctx.uid || '';
     if(!uid) return mergeWithDefaults({});
+    allowedOrThrow();
+    await ensureSharedCalendarDoc();
 
     try{
-      const snap = await getDoc(settingsDocRef(uid));
-      if(!snap.exists()) return mergeWithDefaults({});
-      return mergeWithDefaults(snap.data());
+      const sharedSnap = await getDoc(sharedSettingsDocRef());
+      if(sharedSnap.exists()) return mergeWithDefaults(sharedSnap.data());
+
+      // Primer arranque despues del cambio: si el usuario actual tenia configuracion vieja,
+      // la copiamos como configuracion compartida.
+      try{
+        const legacySnap = await getDoc(legacySettingsDocRef(uid));
+        if(legacySnap.exists()){
+          const migrated = mergeWithDefaults(legacySnap.data());
+          await this.saveSettings(migrated, { uid });
+          return migrated;
+        }
+      }catch(legacyErr){
+        console.warn('[dbApi.getSettings legacy]', explainFirestoreErr(legacyErr) || errMsg(legacyErr));
+      }
+
+      return mergeWithDefaults({});
     }catch(err){
       console.warn('[dbApi.getSettings]', explainFirestoreErr(err) || errMsg(err));
       return mergeWithDefaults({});
@@ -330,18 +495,25 @@ export const dbApi = {
   async saveSettings(settings, opts = {}){
     const uid = normStr(opts.uid, 128) || ctx.uid || '';
     if(!uid) throw new Error('No hay usuario en contexto. Inicia sesion antes de guardar configuracion.');
+    allowedOrThrow();
+    await ensureSharedCalendarDoc();
 
     const clean = normalizeSettings(settings || {});
     const payload = {
       ...clean,
+      calendarId: SHARED_CALENDAR_ID,
+      calendarName: SHARED_CALENDAR_NAME,
+      sharedWith: SHARED_EMAILS.slice(),
       ownerUid: uid,
       ownerEmail: ctx.email || null,
+      updatedByUid: ctx.uid || null,
+      updatedByEmail: ctx.email || null,
       updatedAt: nowMs(),
       updatedAtServer: serverTimestamp(),
     };
 
     try{
-      await setDoc(settingsDocRef(uid), payload, { merge: true });
+      await setDoc(sharedSettingsDocRef(), payload, { merge: true });
       return mergeWithDefaults(clean);
     }catch(err){
       throw new Error(explainFirestoreErr(err) || errMsg(err, 'No se pudo guardar la configuracion.'));
@@ -349,8 +521,9 @@ export const dbApi = {
   },
 
   async ping(){
+    allowedOrThrow();
     try{
-      const qRef = query(collection(db, COL_EVENTS), limit(1));
+      const qRef = query(collection(db, COL_EVENTS), where('calendarId', '==', SHARED_CALENDAR_ID));
       await getDocs(qRef);
       return true;
     }catch(err){

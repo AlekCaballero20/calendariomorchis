@@ -1,4 +1,4 @@
-﻿// auth.js - Firebase Auth API (Google)
+// auth.js - Firebase Auth API (Google)
 // Exporta authApi como espera app.js
 
 import { initFirebase, auth } from './firebase.js';
@@ -19,10 +19,8 @@ import {
  * - Si tiene correos => solo esos
  */
 const ALLOWLIST = new Set([
-  // Ej:
-  // "alek@gmail.com",
-  // "cata@gmail.com",
-  // "*",
+  'alekcaballeromusic@gmail.com',
+  'catalina.medina.leal@gmail.com',
 ]);
 
 const normEmail = (email) => String(email || '').trim().toLowerCase();
